@@ -1,0 +1,38 @@
+# Component Definitions
+# This file defines all available components and their build configurations
+
+components:
+  zookeeper:
+    name: zookeeper
+    description: "Apache ZooKeeper - Distributed coordination service"
+    gradle_tasks:
+      - zookeeper-clean
+      - zookeeper-rpm
+    dependencies: []
+    
+  hadoop:
+    name: hadoop
+    description: "Apache Hadoop - Distributed storage and processing"
+    gradle_tasks:
+      - hadoop-clean
+      - hadoop-rpm
+    dependencies:
+      - zookeeper
+      
+  hue:
+    name: hue
+    description: "Hue - Hadoop User Experience"
+    gradle_tasks:
+      - hue-clean
+      - hue-rpm
+    dependencies: []
+    
+  kafka:
+    name: kafka
+    description: "Apache Kafka - Distributed streaming platform"
+    gradle_tasks:
+      - kafka-clean
+      - kafka-rpm
+    dependencies:
+      - zookeeper
+

@@ -1,0 +1,17 @@
+# ODP Release Configurations
+# This file defines release-specific configurations for ODP builds
+# Note: bigtop_branch and docker_image are now passed as Jenkins parameters
+
+releases:
+  ODP-3.3.6.3-1:
+    namespace: build-deploy
+    github_repo: git@github.com:acceldata-io/odp-bigtop.git
+    secret_name: github-ssh-key
+    job_ttl_seconds: 6000
+    
+  ODP-3.3.7.0-1:
+    namespace: build-deploy
+    github_repo: git@github.com:acceldata-io/odp-bigtop.git
+    secret_name: github-ssh-key
+    job_ttl_seconds: 6000
+
