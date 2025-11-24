@@ -1,138 +1,255 @@
 pipeline {
-    agent {
-        label 'dev-build-deploy-hz'
+    agent { label 'dev-build-deploy-hz' }
+    
+    parameters {
+        string(
+            name: 'REPO_URL',
+            defaultValue: 'https://github.com/acceldata-io/odp-on-k8s.git',
+            description: 'Git repository URL for the build orchestration repo'
+        )
+        string(
+            name: 'REPO_BRANCH',
+            defaultValue: 'main',
+            description: 'Git branch to checkout'
+        )
+        string(
+            name: 'COMPONENTS_TO_BUILD',
+            defaultValue: '',
+            description: 'Comma-separated list of components (e.g., zookeeper,hadoop). Leave empty for all.'
+        )
+        string(
+            name: 'ODP_RELEASE',
+            defaultValue: 'ODP-3.3.6.3-1',
+            description: 'ODP release version'
+        )
+        string(
+            name: 'BIGTOP_BRANCH',
+            defaultValue: 'rel/ODP-3.3.6.3-1',
+            description: 'ODP Bigtop branch to use for builds'
+        )
+        string(
+            name: 'DOCKER_IMAGE',
+            defaultValue: 'repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6',
+            description: 'Docker image to use for build environment'
+        )
+        string(
+            name: 'KUBECONFIG_PATH',
+            defaultValue: '/odp-hz.yaml',
+            description: 'Path to kubeconfig file on the Jenkins agent'
+        )
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: false,
+            description: 'Show build plan without executing'
+        )
+        booleanParam(
+            name: 'NON_INTERACTIVE',
+            defaultValue: true,
+            description: 'Non-interactive mode (automatically skip failed builds)'
+        )
+        booleanParam(
+            name: 'VERBOSE',
+            defaultValue: false,
+            description: 'Enable verbose logging'
+        )
     }
     
     environment {
-        KUBECONFIG = credentials('odp-hz-kubeconfig')
-        RELEASE = 'ODP-3.3.6.3-1'
-        BIGTOP_BRANCH = 'rel/ODP-3.3.6.3-1'
-        DOCKER_IMAGE = 'repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6'
+        KUBECONFIG = "${params.KUBECONFIG_PATH}"
     }
     
     stages {
-        stage('🧱 DEPENDENCY-STAGE-1') {
-            parallel {
-                stage('hue') {
-                    steps {
-                        script {
-                            echo '********************************************************************************'
-                            echo '**  COMPONENT STAGE: HUE'
-                            echo '********************************************************************************'
-                            echo '**  Description: Hue - Hadoop User Experience'
-                            echo '**  Gradle Tasks: hue-clean, hue-rpm'
-                            echo '**  Dependencies: None'
-                            echo '********************************************************************************'
-                            echo ''
-                            sh '''
-                                python3 src/main.py \
-                                    --release ODP-3.3.6.3-1 \
-                                    --components hue \
-                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
-                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
-                                    --kubeconfig ${KUBECONFIG} \
-                                    --non-interactive
-                            '''
-                        }
-                    }
+        stage('Checkout Repository') {
+            steps {
+                script {
+                    echo "============================================"
+                    echo "ODP BUILD PIPELINE"
+                    echo "============================================"
+                    echo "Repository: ${params.REPO_URL}"
+                    echo "Branch: ${params.REPO_BRANCH}"
+                    echo "ODP Release: ${params.ODP_RELEASE}"
+                    echo "Bigtop Branch: ${params.BIGTOP_BRANCH}"
+                    echo "Docker Image: ${params.DOCKER_IMAGE}"
+                    echo "Components: ${params.COMPONENTS_TO_BUILD ?: 'ALL'}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                    echo "Non-Interactive: ${params.NON_INTERACTIVE}"
+                    echo "============================================"
                 }
-                stage('zookeeper') {
-                    steps {
-                        script {
-                            echo '********************************************************************************'
-                            echo '**  COMPONENT STAGE: ZOOKEEPER'
-                            echo '********************************************************************************'
-                            echo '**  Description: Apache ZooKeeper - Distributed coordination service'
-                            echo '**  Gradle Tasks: zookeeper-clean, zookeeper-rpm'
-                            echo '**  Dependencies: None'
-                            echo '********************************************************************************'
-                            echo ''
-                            sh '''
-                                python3 src/main.py \
-                                    --release ODP-3.3.6.3-1 \
-                                    --components zookeeper \
-                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
-                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
-                                    --kubeconfig ${KUBECONFIG} \
-                                    --non-interactive
-                            '''
-                        }
-                    }
+                
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.REPO_BRANCH}"]],
+                    userRemoteConfigs: [[url: "${params.REPO_URL}"]]
+                ])
+                
+                script {
+                    echo "✓ Repository checked out successfully"
                 }
             }
         }
-
-        stage('🧱 DEPENDENCY-STAGE-2') {
-            parallel {
-                stage('hadoop') {
-                    steps {
-                        script {
-                            echo '********************************************************************************'
-                            echo '**  COMPONENT STAGE: HADOOP'
-                            echo '********************************************************************************'
-                            echo '**  Description: Apache Hadoop - Distributed storage and processing'
-                            echo '**  Gradle Tasks: hadoop-clean, hadoop-rpm'
-                            echo '**  Dependencies: zookeeper'
-                            echo '********************************************************************************'
-                            echo ''
-                            sh '''
-                                python3 src/main.py \
-                                    --release ODP-3.3.6.3-1 \
-                                    --components hadoop \
-                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
-                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
-                                    --kubeconfig ${KUBECONFIG} \
-                                    --non-interactive
-                            '''
-                        }
-                    }
+        
+        stage('Setup Environment') {
+            steps {
+                script {
+                    echo "============================================"
+                    echo "Setting up environment"
+                    echo "============================================"
                 }
-                stage('kafka') {
-                    steps {
-                        script {
-                            echo '********************************************************************************'
-                            echo '**  COMPONENT STAGE: KAFKA'
-                            echo '********************************************************************************'
-                            echo '**  Description: Apache Kafka - Distributed streaming platform'
-                            echo '**  Gradle Tasks: kafka-clean, kafka-rpm'
-                            echo '**  Dependencies: zookeeper'
-                            echo '********************************************************************************'
-                            echo ''
-                            sh '''
-                                python3 src/main.py \
-                                    --release ODP-3.3.6.3-1 \
-                                    --components kafka \
-                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
-                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
-                                    --kubeconfig ${KUBECONFIG} \
-                                    --non-interactive
-                            '''
-                        }
+                
+                sh '''
+                    set -e
+                    
+                    echo "Checking Python version..."
+                    python3 --version || {
+                        echo "ERROR: Python3 is required"
+                        exit 1
                     }
+                    
+                    echo "Checking kubectl..."
+                    kubectl version --client || {
+                        echo "ERROR: kubectl is required"
+                        exit 1
+                    }
+                    
+                    echo "Verifying kubeconfig..."
+                    if [ ! -f "${KUBECONFIG}" ]; then
+                        echo "ERROR: Kubeconfig not found: ${KUBECONFIG}"
+                        exit 1
+                    fi
+                    echo "✓ Kubeconfig found: ${KUBECONFIG}"
+                    
+                    echo "Installing Python dependencies..."
+                    if [ -f requirements.txt ]; then
+                        pip3 install -r requirements.txt --user || {
+                            echo "ERROR: Failed to install dependencies"
+                            exit 1
+                        }
+                        echo "✓ Python dependencies installed"
+                    else
+                        echo "WARNING: requirements.txt not found"
+                    fi
+                    
+                    echo "✓ Environment setup completed"
+                '''
+            }
+        }
+        
+        stage('Validate Configuration') {
+            steps {
+                script {
+                    echo "============================================"
+                    echo "Validating configuration"
+                    echo "============================================"
+                }
+                
+                sh '''
+                    set -e
+                    
+                    echo "Checking configuration files..."
+                    
+                    if [ ! -f config/releases.yaml ]; then
+                        echo "ERROR: config/releases.yaml not found"
+                        exit 1
+                    fi
+                    echo "✓ Found config/releases.yaml"
+                    
+                    if [ ! -f config/components.yaml ]; then
+                        echo "ERROR: config/components.yaml not found"
+                        exit 1
+                    fi
+                    echo "✓ Found config/components.yaml"
+                    
+                    echo "Checking source files..."
+                    if [ ! -f src/main.py ]; then
+                        echo "ERROR: src/main.py not found"
+                        exit 1
+                    fi
+                    echo "✓ Found src/main.py"
+                    
+                    echo "✓ All configuration files validated"
+                '''
+            }
+        }
+        
+        stage('Run Build Pipeline') {
+            steps {
+                script {
+                    echo "============================================"
+                    echo "Starting build orchestration"
+                    echo "============================================"
+                }
+                
+                script {
+                    // Build the command
+                    def cmd = "python3 src/main.py " +
+                              "--release '${params.ODP_RELEASE}' " +
+                              "--components '${params.COMPONENTS_TO_BUILD}' " +
+                              "--bigtop-branch '${params.BIGTOP_BRANCH}' " +
+                              "--docker-image '${params.DOCKER_IMAGE}' " +
+                              "--kubeconfig '${params.KUBECONFIG_PATH}'"
+                    
+                    if (params.DRY_RUN) {
+                        cmd += " --dry-run"
+                    }
+                    
+                    if (params.NON_INTERACTIVE) {
+                        cmd += " --non-interactive"
+                    }
+                    
+                    if (params.VERBOSE) {
+                        cmd += " --verbose"
+                    }
+                    
+                    echo "Executing command:"
+                    echo cmd
+                    echo ""
+                    
+                    // Execute the build pipeline
+                    sh cmd
                 }
             }
         }
-
     }
     
     post {
         always {
             script {
-                echo '=' * 80
-                echo 'BUILD PIPELINE COMPLETED'
-                echo '=' * 80
+                echo ""
+                echo "============================================"
+                echo "Build Pipeline Completed"
+                echo "============================================"
+                echo "Release: ${params.ODP_RELEASE}"
+                echo "Bigtop Branch: ${params.BIGTOP_BRANCH}"
+                echo "Components: ${params.COMPONENTS_TO_BUILD ?: 'ALL'}"
+                echo "============================================"
             }
         }
         success {
             script {
-                echo '✓ All components built successfully'
+                echo ""
+                echo "✓✓✓ BUILD PIPELINE COMPLETED SUCCESSFULLY ✓✓✓"
+                echo ""
             }
         }
         failure {
             script {
-                echo '✗ Some components failed to build'
+                echo ""
+                echo "✗✗✗ BUILD PIPELINE FAILED ✗✗✗"
+                echo ""
+                echo "Check the logs above for detailed error information."
+                echo "Common issues:"
+                echo "  - Kubernetes namespace or secret not configured"
+                echo "  - Docker image not accessible"
+                echo "  - Build errors in component Gradle tasks"
+                echo ""
+            }
+        }
+        unstable {
+            script {
+                echo ""
+                echo "⚠⚠⚠ BUILD PIPELINE UNSTABLE ⚠⚠⚠"
+                echo ""
             }
         }
     }
 }
-

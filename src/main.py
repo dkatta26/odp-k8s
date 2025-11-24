@@ -16,8 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from k8s_manager import KubernetesJobManager
 from orchestrator import BuildOrchestrator
-from jenkinsfile_generator import JenkinsfileGenerator
-from scripted_jenkinsfile_generator import ScriptedJenkinsfileGenerator
 
 
 def setup_logging(verbose: bool = False):
@@ -59,20 +57,88 @@ def get_repo_root() -> Path:
     return Path(__file__).parent.parent
 
 
-def parse_components(components_str: str) -> Optional[List[str]]:
+def parse_components(components_str: str, available_components: List[str]) -> Optional[List[str]]:
     """
     Parse comma-separated component string
     
     Args:
         components_str: Comma-separated component names
+        available_components: List of available component names
         
     Returns:
-        List of component names, or None if empty
+        List of component names, or None if empty (meaning build all)
     """
     if not components_str or not components_str.strip():
         return None
     
-    return [c.strip().lower() for c in components_str.split(',') if c.strip()]
+    requested = [c.strip().lower() for c in components_str.split(',') if c.strip()]
+    
+    # Validate components
+    invalid = [c for c in requested if c not in available_components]
+    if invalid:
+        raise ValueError(f"Invalid components: {', '.join(invalid)}")
+    
+    return requested
+
+
+def print_header():
+    """Print pipeline header"""
+    logger = logging.getLogger(__name__)
+    logger.info("=" * 80)
+    logger.info("ODP BUILD PIPELINE")
+    logger.info("=" * 80)
+
+
+def print_config(args, components_to_build: List[str]):
+    """Print configuration summary"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Release: {args.release}")
+    logger.info(f"Bigtop Branch: {args.bigtop_branch}")
+    logger.info(f"Docker Image: {args.docker_image}")
+    logger.info(f"Components: {', '.join(components_to_build)}")
+    logger.info(f"Kubeconfig: {args.kubeconfig}")
+    logger.info(f"Dry Run: {args.dry_run}")
+    logger.info(f"Interactive Mode: {not args.non_interactive}")
+    logger.info("=" * 80)
+
+
+def verify_environment(k8s_manager: KubernetesJobManager, release_config: Dict) -> bool:
+    """
+    Verify Kubernetes environment is ready
+    
+    Args:
+        k8s_manager: KubernetesJobManager instance
+        release_config: Release configuration
+        
+    Returns:
+        True if environment is ready, False otherwise
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("\n" + "=" * 80)
+    logger.info("VERIFYING KUBERNETES ENVIRONMENT")
+    logger.info("=" * 80)
+    
+    # Verify namespace
+    if not k8s_manager.verify_namespace(release_config['namespace']):
+        logger.error(f"✗ Namespace '{release_config['namespace']}' does not exist")
+        logger.error(f"\nCreate the namespace using:")
+        logger.error(f"  kubectl create namespace {release_config['namespace']}")
+        return False
+    logger.info(f"✓ Namespace '{release_config['namespace']}' exists")
+    
+    # Verify secret
+    if not k8s_manager.verify_secret(release_config['secret_name'], release_config['namespace']):
+        logger.error(f"✗ Secret '{release_config['secret_name']}' does not exist")
+        logger.error(f"\nCreate the secret using:")
+        logger.error(f"  kubectl create secret generic {release_config['secret_name']} \\")
+        logger.error(f"    --from-file=id_rsa=$HOME/.ssh/id_rsa \\")
+        logger.error(f"    --from-file=known_hosts=$HOME/.ssh/known_hosts \\")
+        logger.error(f"    -n {release_config['namespace']}")
+        return False
+    logger.info(f"✓ Secret '{release_config['secret_name']}' exists")
+    
+    logger.info("=" * 80)
+    return True
 
 
 def main():
@@ -89,28 +155,17 @@ Examples:
   
   # Build specific components
   python3 main.py --release ODP-3.3.6.3-1 \\
+    --components zookeeper,hadoop \\
     --bigtop-branch rel/ODP-3.3.6.3-1 \\
-    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \\
-    --components zookeeper,hadoop
-  
-  # Verbose output
-  python3 main.py --release ODP-3.3.6.3-1 \\
-    --bigtop-branch rel/ODP-3.3.6.3-1 \\
-    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \\
-    --verbose
+    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6
 """
     )
     
+    # Required arguments
     parser.add_argument(
         '--release',
         required=True,
         help='ODP release version (e.g., ODP-3.3.6.3-1)'
-    )
-    
-    parser.add_argument(
-        '--components',
-        default='',
-        help='Comma-separated list of components to build (leave empty for all)'
     )
     
     parser.add_argument(
@@ -123,6 +178,13 @@ Examples:
         '--docker-image',
         required=True,
         help='Docker image to use for build environment'
+    )
+    
+    # Optional arguments
+    parser.add_argument(
+        '--components',
+        default='',
+        help='Comma-separated list of components to build (leave empty for all)'
     )
     
     parser.add_argument(
@@ -146,7 +208,7 @@ Examples:
     parser.add_argument(
         '--non-interactive',
         action='store_true',
-        help='Non-interactive mode: skip failed builds automatically without prompting'
+        help='Non-interactive mode: skip failed builds automatically'
     )
     
     parser.add_argument(
@@ -155,68 +217,44 @@ Examples:
         help='Stream build logs in real-time (may interleave in parallel builds)'
     )
     
-    parser.add_argument(
-        '--generate-jenkinsfile',
-        action='store_true',
-        help='Generate Jenkinsfile with separate stages for each component'
-    )
-    
-    parser.add_argument(
-        '--scripted-pipeline',
-        action='store_true',
-        help='Generate scripted pipeline (enables dynamic triggering as dependencies are met)'
-    )
-    
-    parser.add_argument(
-        '--jenkinsfile-output',
-        default='Jenkinsfile.generated',
-        help='Output path for generated Jenkinsfile (default: Jenkinsfile.generated)'
-    )
-    
-    parser.add_argument(
-        '--print-pipeline-structure',
-        action='store_true',
-        help='Print the Jenkins pipeline structure that will be generated'
-    )
-    
     args = parser.parse_args()
     
     # Setup logging
     setup_logging(args.verbose)
     logger = logging.getLogger(__name__)
     
-    logger.info("=" * 80)
-    logger.info("ODP BUILD PIPELINE")
-    logger.info("=" * 80)
-    logger.info(f"Release: {args.release}")
-    logger.info(f"Bigtop Branch: {args.bigtop_branch}")
-    logger.info(f"Docker Image: {args.docker_image}")
-    logger.info(f"Components: {args.components or 'ALL'}")
-    logger.info(f"Kubeconfig: {args.kubeconfig}")
-    logger.info(f"Dry Run: {args.dry_run}")
-    logger.info(f"Interactive Mode: {not args.non_interactive}")
-    logger.info(f"Stream Logs: {args.stream_logs}")
-    logger.info("=" * 80)
-    
     try:
-        # Get repository root
+        # Print header
+        print_header()
+        
+        # Get repository root and configuration directory
         repo_root = get_repo_root()
         config_dir = repo_root / 'config'
         
         logger.info(f"Repository root: {repo_root}")
         logger.info(f"Configuration directory: {config_dir}")
+        logger.info("")
         
         # Load configurations
-        logger.info("\nLoading configurations...")
+        logger.info("Loading configurations...")
         
         releases_config_file = config_dir / 'releases.yaml'
         components_config_file = config_dir / 'components.yaml'
         
-        logger.info(f"  Loading releases config: {releases_config_file}")
-        releases_config = load_yaml_config(releases_config_file)
+        if not releases_config_file.exists():
+            logger.error(f"Releases config not found: {releases_config_file}")
+            return 1
         
-        logger.info(f"  Loading components config: {components_config_file}")
+        if not components_config_file.exists():
+            logger.error(f"Components config not found: {components_config_file}")
+            return 1
+        
+        releases_config = load_yaml_config(releases_config_file)
         components_config = load_yaml_config(components_config_file)
+        
+        logger.info(f"✓ Loaded releases configuration")
+        logger.info(f"✓ Loaded components configuration")
+        logger.info("")
         
         # Get release configuration
         if args.release not in releases_config['releases']:
@@ -224,125 +262,46 @@ Examples:
             logger.error(f"Available releases: {', '.join(releases_config['releases'].keys())}")
             return 1
         
-        release_config = releases_config['releases'][args.release]
+        release_config = releases_config['releases'][args.release].copy()
         
         # Override with command-line parameters
         release_config['bigtop_branch'] = args.bigtop_branch
         release_config['docker_image'] = args.docker_image
         release_config['release_name'] = args.release
         
-        logger.info(f"\n✓ Loaded configuration for {args.release}")
+        logger.info(f"Release Configuration:")
+        logger.info(f"  Name: {args.release}")
         logger.info(f"  Branch: {release_config['bigtop_branch']}")
         logger.info(f"  Docker Image: {release_config['docker_image']}")
         logger.info(f"  Namespace: {release_config['namespace']}")
+        logger.info(f"  GitHub Repo: {release_config['github_repo']}")
+        logger.info("")
         
         # Parse components to build
-        components_to_build = parse_components(args.components)
+        available_components = list(components_config['components'].keys())
+        components_to_build = parse_components(args.components, available_components)
+        
         if components_to_build is None:
             # Build all components
-            components_to_build = list(components_config['components'].keys())
-            logger.info(f"\n✓ Building all components: {', '.join(components_to_build)}")
+            components_to_build = available_components
+            logger.info(f"Building ALL components: {', '.join(components_to_build)}")
         else:
-            logger.info(f"\n✓ Building selected components: {', '.join(components_to_build)}")
+            logger.info(f"Building SELECTED components: {', '.join(components_to_build)}")
         
-        # Generate Jenkinsfile if requested
-        if args.generate_jenkinsfile or args.print_pipeline_structure:
-            if args.scripted_pipeline:
-                logger.info("\nInitializing scripted Jenkinsfile generator...")
-                logger.info("This will generate a pipeline with DYNAMIC dependency triggering")
-                logger.info("(components start immediately when dependencies are met)")
-                
-                generator = ScriptedJenkinsfileGenerator(
-                    components_config['components'],
-                    release_config
-                )
-                
-                if args.print_pipeline_structure:
-                    logger.info("")
-                    generator.print_pipeline_info(components_to_build)
-                
-                if args.generate_jenkinsfile:
-                    logger.info(f"\nGenerating scripted Jenkinsfile: {args.jenkinsfile_output}")
-                    jenkinsfile_content = generator.generate_scripted_jenkinsfile(components_to_build)
-                    
-                    # Write to file
-                    output_path = repo_root / args.jenkinsfile_output
-                    with open(output_path, 'w') as f:
-                        f.write(jenkinsfile_content)
-                    
-                    logger.info(f"✓ Scripted Jenkinsfile generated: {output_path}")
-                    logger.info("\nGenerated pipeline features:")
-                    generator.print_pipeline_info(components_to_build)
-                    
-                    logger.info(f"\nTo use this Jenkinsfile:")
-                    logger.info(f"  1. Review the generated file: {output_path}")
-                    logger.info(f"  2. Update agent label and credentials if needed")
-                    logger.info(f"  3. Copy to your repository as 'Jenkinsfile'")
-                    logger.info(f"  4. Configure Jenkins pipeline to use it")
-                    logger.info(f"\n⚠️  Note: This is a SCRIPTED pipeline (not declarative)")
-                    logger.info(f"     It provides dynamic triggering but is more complex")
-                    
-                    return 0
-            else:
-                logger.info("\nInitializing declarative Jenkinsfile generator...")
-                logger.info("This will generate a standard pipeline with dependency stages")
-                logger.info("(all components in a stage must complete before next stage starts)")
-                
-                generator = JenkinsfileGenerator(
-                    components_config['components'],
-                    release_config
-                )
-                
-                if args.print_pipeline_structure:
-                    logger.info("")
-                    generator.print_build_structure(components_to_build)
-                
-                if args.generate_jenkinsfile:
-                    logger.info(f"\nGenerating declarative Jenkinsfile: {args.jenkinsfile_output}")
-                    jenkinsfile_content = generator.generate_jenkinsfile(
-                        components_to_build,
-                        agent_label="k8s-build-agent",  # Update as needed
-                        kubeconfig_credential="odp-hz-kubeconfig"  # Update as needed
-                    )
-                    
-                    # Write to file
-                    output_path = repo_root / args.jenkinsfile_output
-                    with open(output_path, 'w') as f:
-                        f.write(jenkinsfile_content)
-                    
-                    logger.info(f"✓ Declarative Jenkinsfile generated: {output_path}")
-                    logger.info("\nGenerated Jenkinsfile structure:")
-                    generator.print_build_structure(components_to_build)
-                    
-                    logger.info(f"\nTo use this Jenkinsfile:")
-                    logger.info(f"  1. Review the generated file: {output_path}")
-                    logger.info(f"  2. Update agent label and credentials if needed")
-                    logger.info(f"  3. Copy to your repository as 'Jenkinsfile'")
-                    logger.info(f"  4. Configure Jenkins pipeline to use it")
-                    logger.info(f"\n💡 Tip: Use --scripted-pipeline for dynamic dependency triggering")
-                    
-                    return 0
+        logger.info("")
+        
+        # Print final configuration
+        print_config(args, components_to_build)
         
         # Initialize Kubernetes manager
         logger.info("\nInitializing Kubernetes manager...")
         k8s_manager = KubernetesJobManager(args.kubeconfig)
+        logger.info("✓ Kubernetes manager initialized")
         
-        # Verify namespace and secret
-        logger.info("\nVerifying Kubernetes resources...")
-        if not k8s_manager.verify_namespace(release_config['namespace']):
-            logger.error(f"✗ Namespace '{release_config['namespace']}' does not exist")
+        # Verify environment
+        if not verify_environment(k8s_manager, release_config):
+            logger.error("\n✗ Environment verification failed")
             return 1
-        logger.info(f"✓ Namespace '{release_config['namespace']}' exists")
-        
-        if not k8s_manager.verify_secret(release_config['secret_name'], release_config['namespace']):
-            logger.error(f"✗ Secret '{release_config['secret_name']}' does not exist in namespace '{release_config['namespace']}'")
-            logger.error(f"\nCreate the secret using:")
-            logger.error(f"  kubectl create secret generic {release_config['secret_name']} \\")
-            logger.error(f"    --from-file=id_rsa=/root/.ssh/id_rsa \\")
-            logger.error(f"    --from-file=known_hosts=/root/.ssh/known_hosts \\")
-            logger.error(f"    -n {release_config['namespace']}")
-            return 1
-        logger.info(f"✓ Secret '{release_config['secret_name']}' exists")
         
         # Initialize orchestrator
         logger.info("\nInitializing build orchestrator...")
@@ -353,10 +312,12 @@ Examples:
             interactive=not args.non_interactive,
             stream_logs=args.stream_logs
         )
+        logger.info("✓ Build orchestrator initialized")
+        logger.info("")
         
         # Dry run - just show the plan
         if args.dry_run:
-            logger.info("\n" + "=" * 80)
+            logger.info("=" * 80)
             logger.info("DRY RUN MODE - Build plan only")
             logger.info("=" * 80)
             orchestrator.print_build_plan(components_to_build)
@@ -364,23 +325,29 @@ Examples:
             return 0
         
         # Execute builds
-        logger.info("\nStarting build execution...")
+        logger.info("Starting build execution...")
+        logger.info("")
+        
         success = orchestrator.build_all(components_to_build)
         
         # Print final summary
         summary = orchestrator.get_build_summary()
         logger.info("\n" + "=" * 80)
-        logger.info("FINAL SUMMARY")
+        logger.info("FINAL BUILD SUMMARY")
         logger.info("=" * 80)
+        logger.info(f"Total Components: {len(components_to_build)}")
         logger.info(f"Completed: {summary['total_completed']}")
         logger.info(f"Skipped: {summary['total_skipped']}")
         logger.info(f"Failed: {summary['total_failed']}")
+        logger.info("")
+        
         if summary['completed']:
-            logger.info(f"✓ {', '.join(summary['completed'])}")
+            logger.info(f"✓ Completed: {', '.join(summary['completed'])}")
         if summary['skipped']:
-            logger.warning(f"⊗ {', '.join(summary['skipped'])}")
+            logger.warning(f"⊗ Skipped: {', '.join(summary['skipped'])}")
         if summary['failed']:
-            logger.error(f"✗ {', '.join(summary['failed'])}")
+            logger.error(f"✗ Failed: {', '.join(summary['failed'])}")
+        
         logger.info("=" * 80)
         
         if success:
@@ -393,6 +360,12 @@ Examples:
     except FileNotFoundError as e:
         logger.error(f"\n✗ Configuration error: {e}")
         return 1
+    except ValueError as e:
+        logger.error(f"\n✗ Validation error: {e}")
+        return 1
+    except KeyboardInterrupt:
+        logger.error(f"\n\n✗ Build interrupted by user")
+        return 1
     except Exception as e:
         logger.error(f"\n✗ Unexpected error: {e}", exc_info=True)
         return 1
@@ -400,4 +373,3 @@ Examples:
 
 if __name__ == '__main__':
     sys.exit(main())
-
