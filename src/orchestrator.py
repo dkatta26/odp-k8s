@@ -418,14 +418,21 @@ class BuildOrchestrator:
             futures = {}  # Future -> component mapping
             
             try:
+                iteration = 0
                 while remaining or futures:
+                    iteration += 1
+                    logger.info(f"=== Loop iteration {iteration} ===")
+                    logger.info(f"Remaining: {len(remaining)}, In Progress: {len(self.in_progress)}, Futures: {len(futures)}")
+                    
                     # Check which components are ready to build
                     ready_to_build = []
+                    logger.info("Checking which components are ready...")
                     with self.lock:
                         for component in list(remaining):
+                            logger.info(f"  Checking {component}...")
                             # Skip if already in progress or dependencies not met
                             if component in self.in_progress:
-                                logger.debug(f"[{component}] Already in progress, skipping")
+                                logger.info(f"  [{component}] Already in progress, skipping")
                                 continue
                             
                             if self.dependencies_met(component, valid_components):
@@ -438,18 +445,25 @@ class BuildOrchestrator:
                                     remaining.discard(component)
                                     continue
                                 
-                                logger.info(f"[{component}] Ready to build (dependencies met)")
+                                logger.info(f"  [{component}] ✓ Ready to build (dependencies met)")
                                 ready_to_build.append(component)
                             else:
                                 deps = self.get_dependencies(component)
                                 unmet = [d for d in deps if d in valid_components and d not in self.completed]
-                                logger.debug(f"[{component}] Not ready - waiting for: {', '.join(unmet)}")
+                                if unmet:
+                                    logger.info(f"  [{component}] Not ready - waiting for: {', '.join(unmet)}")
+                                else:
+                                    logger.info(f"  [{component}] No dependencies but not ready (unexpected!)")
                     
                     # Submit new builds for ready components
                     if ready_to_build:
-                        logger.info(f"\nSubmitting {len(ready_to_build)} component(s) for build: {', '.join(ready_to_build)}\n")
+                        logger.info(f"\n✓ Found {len(ready_to_build)} component(s) ready: {', '.join(ready_to_build)}")
+                        logger.info(f"Submitting for build...\n")
+                    else:
+                        logger.info("No components ready to build in this iteration")
                     
                     for component in ready_to_build:
+                        logger.info(f"[{component}] Marking as in_progress and submitting...")
                         with self.lock:
                             self.in_progress.add(component)
                         remaining.discard(component)
@@ -457,8 +471,10 @@ class BuildOrchestrator:
                         logger.info(f"[{component}] Dependencies met, starting build...")
                         future = executor.submit(self.build_component_wrapper, component, total_components)
                         futures[future] = component
+                        logger.info(f"[{component}] Build future submitted")
                     
                     # Check for completed builds
+                    logger.info(f"Checking for completed builds... (futures: {len(futures)})")
                     if futures:
                         # Wait for at least one build to complete
                         done_futures = []
@@ -466,9 +482,11 @@ class BuildOrchestrator:
                             if future.done():
                                 done_futures.append(future)
                         
+                        logger.info(f"Done futures: {len(done_futures)}")
+                        
                         if not done_futures and not ready_to_build:
                             # Wait a bit for something to complete
-                            logger.debug(f"Waiting for builds to complete... (in progress: {len(futures)})")
+                            logger.info(f"Waiting for builds to complete... (in progress: {len(futures)})")
                             time.sleep(1)
                             continue
                         
@@ -493,7 +511,8 @@ class BuildOrchestrator:
                             del futures[future]
                     elif not ready_to_build and remaining:
                         # Nothing ready but still have remaining components
-                        logger.debug(f"No components ready, remaining: {len(remaining)}, in_progress: {len(self.in_progress)}")
+                        logger.info(f"No components ready, remaining: {len(remaining)}, in_progress: {len(self.in_progress)}")
+                        logger.info("Waiting 1 second before next check...")
                         time.sleep(1)
                     
                     # If nothing is ready and nothing is running, we're stuck
