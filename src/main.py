@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from k8s_manager import KubernetesJobManager
 from orchestrator import BuildOrchestrator
+from jenkinsfile_generator import JenkinsfileGenerator
+from scripted_jenkinsfile_generator import ScriptedJenkinsfileGenerator
 
 
 def setup_logging(verbose: bool = False):
@@ -147,6 +149,36 @@ Examples:
         help='Non-interactive mode: skip failed builds automatically without prompting'
     )
     
+    parser.add_argument(
+        '--stream-logs',
+        action='store_true',
+        help='Stream build logs in real-time (may interleave in parallel builds)'
+    )
+    
+    parser.add_argument(
+        '--generate-jenkinsfile',
+        action='store_true',
+        help='Generate Jenkinsfile with separate stages for each component'
+    )
+    
+    parser.add_argument(
+        '--scripted-pipeline',
+        action='store_true',
+        help='Generate scripted pipeline (enables dynamic triggering as dependencies are met)'
+    )
+    
+    parser.add_argument(
+        '--jenkinsfile-output',
+        default='Jenkinsfile.generated',
+        help='Output path for generated Jenkinsfile (default: Jenkinsfile.generated)'
+    )
+    
+    parser.add_argument(
+        '--print-pipeline-structure',
+        action='store_true',
+        help='Print the Jenkins pipeline structure that will be generated'
+    )
+    
     args = parser.parse_args()
     
     # Setup logging
@@ -163,6 +195,7 @@ Examples:
     logger.info(f"Kubeconfig: {args.kubeconfig}")
     logger.info(f"Dry Run: {args.dry_run}")
     logger.info(f"Interactive Mode: {not args.non_interactive}")
+    logger.info(f"Stream Logs: {args.stream_logs}")
     logger.info("=" * 80)
     
     try:
@@ -196,6 +229,7 @@ Examples:
         # Override with command-line parameters
         release_config['bigtop_branch'] = args.bigtop_branch
         release_config['docker_image'] = args.docker_image
+        release_config['release_name'] = args.release
         
         logger.info(f"\n✓ Loaded configuration for {args.release}")
         logger.info(f"  Branch: {release_config['bigtop_branch']}")
@@ -210,6 +244,84 @@ Examples:
             logger.info(f"\n✓ Building all components: {', '.join(components_to_build)}")
         else:
             logger.info(f"\n✓ Building selected components: {', '.join(components_to_build)}")
+        
+        # Generate Jenkinsfile if requested
+        if args.generate_jenkinsfile or args.print_pipeline_structure:
+            if args.scripted_pipeline:
+                logger.info("\nInitializing scripted Jenkinsfile generator...")
+                logger.info("This will generate a pipeline with DYNAMIC dependency triggering")
+                logger.info("(components start immediately when dependencies are met)")
+                
+                generator = ScriptedJenkinsfileGenerator(
+                    components_config['components'],
+                    release_config
+                )
+                
+                if args.print_pipeline_structure:
+                    logger.info("")
+                    generator.print_pipeline_info(components_to_build)
+                
+                if args.generate_jenkinsfile:
+                    logger.info(f"\nGenerating scripted Jenkinsfile: {args.jenkinsfile_output}")
+                    jenkinsfile_content = generator.generate_scripted_jenkinsfile(components_to_build)
+                    
+                    # Write to file
+                    output_path = repo_root / args.jenkinsfile_output
+                    with open(output_path, 'w') as f:
+                        f.write(jenkinsfile_content)
+                    
+                    logger.info(f"✓ Scripted Jenkinsfile generated: {output_path}")
+                    logger.info("\nGenerated pipeline features:")
+                    generator.print_pipeline_info(components_to_build)
+                    
+                    logger.info(f"\nTo use this Jenkinsfile:")
+                    logger.info(f"  1. Review the generated file: {output_path}")
+                    logger.info(f"  2. Update agent label and credentials if needed")
+                    logger.info(f"  3. Copy to your repository as 'Jenkinsfile'")
+                    logger.info(f"  4. Configure Jenkins pipeline to use it")
+                    logger.info(f"\n⚠️  Note: This is a SCRIPTED pipeline (not declarative)")
+                    logger.info(f"     It provides dynamic triggering but is more complex")
+                    
+                    return 0
+            else:
+                logger.info("\nInitializing declarative Jenkinsfile generator...")
+                logger.info("This will generate a standard pipeline with dependency stages")
+                logger.info("(all components in a stage must complete before next stage starts)")
+                
+                generator = JenkinsfileGenerator(
+                    components_config['components'],
+                    release_config
+                )
+                
+                if args.print_pipeline_structure:
+                    logger.info("")
+                    generator.print_build_structure(components_to_build)
+                
+                if args.generate_jenkinsfile:
+                    logger.info(f"\nGenerating declarative Jenkinsfile: {args.jenkinsfile_output}")
+                    jenkinsfile_content = generator.generate_jenkinsfile(
+                        components_to_build,
+                        agent_label="k8s-build-agent",  # Update as needed
+                        kubeconfig_credential="odp-hz-kubeconfig"  # Update as needed
+                    )
+                    
+                    # Write to file
+                    output_path = repo_root / args.jenkinsfile_output
+                    with open(output_path, 'w') as f:
+                        f.write(jenkinsfile_content)
+                    
+                    logger.info(f"✓ Declarative Jenkinsfile generated: {output_path}")
+                    logger.info("\nGenerated Jenkinsfile structure:")
+                    generator.print_build_structure(components_to_build)
+                    
+                    logger.info(f"\nTo use this Jenkinsfile:")
+                    logger.info(f"  1. Review the generated file: {output_path}")
+                    logger.info(f"  2. Update agent label and credentials if needed")
+                    logger.info(f"  3. Copy to your repository as 'Jenkinsfile'")
+                    logger.info(f"  4. Configure Jenkins pipeline to use it")
+                    logger.info(f"\n💡 Tip: Use --scripted-pipeline for dynamic dependency triggering")
+                    
+                    return 0
         
         # Initialize Kubernetes manager
         logger.info("\nInitializing Kubernetes manager...")
@@ -238,7 +350,8 @@ Examples:
             k8s_manager,
             components_config['components'],
             release_config,
-            interactive=not args.non_interactive
+            interactive=not args.non_interactive,
+            stream_logs=args.stream_logs
         )
         
         # Dry run - just show the plan

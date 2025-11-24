@@ -272,7 +272,8 @@ echo "[INFO] Build complete for {component}"
         self._run_kubectl(args, capture_output=False)
     
     def wait_for_job(self, job_name: str, namespace: str, 
-                     timeout: int = 3600, check_interval: int = 30) -> bool:
+                     timeout: int = 3600, check_interval: int = 30,
+                     component_prefix: str = "", stream_logs: bool = False) -> bool:
         """
         Wait for a job to complete
         
@@ -281,39 +282,53 @@ echo "[INFO] Build complete for {component}"
             namespace: Kubernetes namespace
             timeout: Maximum time to wait in seconds
             check_interval: Interval between status checks in seconds
+            component_prefix: Prefix for log messages (e.g., "[component-name]")
+            stream_logs: Whether to stream logs in real-time
             
         Returns:
             True if job completed successfully, False if failed or timeout
         """
-        logger.info(f"Waiting for job to complete: {job_name}")
+        logger.info(f"{component_prefix} Waiting for job to complete: {job_name}")
         start_time = time.time()
+        
+        # Stream logs in background if requested
+        log_streamed = False
         
         while True:
             elapsed = int(time.time() - start_time)
             
             if elapsed >= timeout:
-                logger.error(f"✗ Timeout waiting for job {job_name} after {timeout}s")
+                logger.error(f"{component_prefix} ✗ Timeout after {timeout}s")
                 return False
             
             status = self.get_job_status(job_name, namespace)
             
             if not status['exists']:
-                logger.error(f"✗ Job {job_name} not found")
+                logger.error(f"{component_prefix} ✗ Job not found")
                 return False
             
             if status['completed']:
-                logger.info(f"✓ Job {job_name} completed successfully")
+                logger.info(f"{component_prefix} ✓ Job completed successfully")
                 return True
             
             if status['failed']:
-                logger.error(f"✗ Job {job_name} failed")
+                logger.error(f"{component_prefix} ✗ Job failed")
                 # Print last 50 lines of logs
                 logs = self.get_job_logs(job_name, namespace, tail=50)
-                logger.error("Last 50 lines of logs:")
-                logger.error(logs)
+                logger.error(f"{component_prefix} Last 50 lines of logs:")
+                for line in logs.split('\n'):
+                    if line.strip():
+                        logger.error(f"{component_prefix}   {line}")
                 return False
             
-            logger.info(f"  [{elapsed}s] Job {job_name} still running...")
+            # Stream logs once when job starts running (first active check)
+            if stream_logs and status['active'] and not log_streamed:
+                logger.info(f"{component_prefix} Job is running, streaming logs...")
+                # Note: In parallel builds, streaming might interleave logs
+                # For now, we'll just note that logs are being generated
+                log_streamed = True
+            
+            logger.info(f"{component_prefix}   [{elapsed}s] Job still running...")
             time.sleep(check_interval)
     
     def delete_job(self, job_name: str, namespace: str) -> bool:

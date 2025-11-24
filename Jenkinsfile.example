@@ -1,0 +1,138 @@
+pipeline {
+    agent {
+        label 'k8s-build-agent'
+    }
+    
+    environment {
+        KUBECONFIG = credentials('odp-hz-kubeconfig')
+        RELEASE = 'ODP-3.3.6.3-1'
+        BIGTOP_BRANCH = 'rel/ODP-3.3.6.3-1'
+        DOCKER_IMAGE = 'repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6'
+    }
+    
+    stages {
+        stage('🧱 DEPENDENCY-STAGE-1') {
+            parallel {
+                stage('hue') {
+                    steps {
+                        script {
+                            echo '********************************************************************************'
+                            echo '**  COMPONENT STAGE: HUE'
+                            echo '********************************************************************************'
+                            echo '**  Description: Hue - Hadoop User Experience'
+                            echo '**  Gradle Tasks: hue-clean, hue-rpm'
+                            echo '**  Dependencies: None'
+                            echo '********************************************************************************'
+                            echo ''
+                            sh '''
+                                python3 src/main.py \
+                                    --release ODP-3.3.6.3-1 \
+                                    --components hue \
+                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
+                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
+                                    --kubeconfig ${KUBECONFIG} \
+                                    --non-interactive
+                            '''
+                        }
+                    }
+                }
+                stage('zookeeper') {
+                    steps {
+                        script {
+                            echo '********************************************************************************'
+                            echo '**  COMPONENT STAGE: ZOOKEEPER'
+                            echo '********************************************************************************'
+                            echo '**  Description: Apache ZooKeeper - Distributed coordination service'
+                            echo '**  Gradle Tasks: zookeeper-clean, zookeeper-rpm'
+                            echo '**  Dependencies: None'
+                            echo '********************************************************************************'
+                            echo ''
+                            sh '''
+                                python3 src/main.py \
+                                    --release ODP-3.3.6.3-1 \
+                                    --components zookeeper \
+                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
+                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
+                                    --kubeconfig ${KUBECONFIG} \
+                                    --non-interactive
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('🧱 DEPENDENCY-STAGE-2') {
+            parallel {
+                stage('hadoop') {
+                    steps {
+                        script {
+                            echo '********************************************************************************'
+                            echo '**  COMPONENT STAGE: HADOOP'
+                            echo '********************************************************************************'
+                            echo '**  Description: Apache Hadoop - Distributed storage and processing'
+                            echo '**  Gradle Tasks: hadoop-clean, hadoop-rpm'
+                            echo '**  Dependencies: zookeeper'
+                            echo '********************************************************************************'
+                            echo ''
+                            sh '''
+                                python3 src/main.py \
+                                    --release ODP-3.3.6.3-1 \
+                                    --components hadoop \
+                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
+                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
+                                    --kubeconfig ${KUBECONFIG} \
+                                    --non-interactive
+                            '''
+                        }
+                    }
+                }
+                stage('kafka') {
+                    steps {
+                        script {
+                            echo '********************************************************************************'
+                            echo '**  COMPONENT STAGE: KAFKA'
+                            echo '********************************************************************************'
+                            echo '**  Description: Apache Kafka - Distributed streaming platform'
+                            echo '**  Gradle Tasks: kafka-clean, kafka-rpm'
+                            echo '**  Dependencies: zookeeper'
+                            echo '********************************************************************************'
+                            echo ''
+                            sh '''
+                                python3 src/main.py \
+                                    --release ODP-3.3.6.3-1 \
+                                    --components kafka \
+                                    --bigtop-branch rel/ODP-3.3.6.3-1 \
+                                    --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \
+                                    --kubeconfig ${KUBECONFIG} \
+                                    --non-interactive
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+    
+    post {
+        always {
+            script {
+                echo '=' * 80
+                echo 'BUILD PIPELINE COMPLETED'
+                echo '=' * 80
+            }
+        }
+        success {
+            script {
+                echo '✓ All components built successfully'
+            }
+        }
+        failure {
+            script {
+                echo '✗ Some components failed to build'
+            }
+        }
+    }
+}
+

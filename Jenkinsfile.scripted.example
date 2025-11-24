@@ -1,0 +1,207 @@
+// Dynamic Build Pipeline with Dependency-Based Triggering
+// Generated automatically - each component starts as soon as its dependencies complete
+// This WILL start hadoop/kafka as soon as zookeeper completes (won't wait for hue)
+
+node('k8s-build-agent') {
+    
+    // Environment setup
+    withCredentials([file(credentialsId: 'odp-hz-kubeconfig', variable: 'KUBECONFIG')]) {
+        
+        // Component status tracking
+        def completed = [] as Set
+        def failed = [] as Set
+        def skipped = [] as Set
+        def inProgress = [] as Set
+        def remaining = ['hadoop', 'hue', 'kafka', 'zookeeper'] as Set
+        
+        // Component dependencies map
+        def componentDeps = ['hadoop': ['zookeeper'], 'hue': [], 'kafka': ['zookeeper'], 'zookeeper': []]
+        
+        // Lock for thread-safe updates
+        def statusLock = new Object()
+        
+        // Function to check if component's dependencies are met
+        def dependenciesMet = { component ->
+            def deps = componentDeps[component]
+            if (deps == null || deps.isEmpty()) {
+                return true
+            }
+            synchronized(statusLock) {
+                return deps.every { dep -> completed.contains(dep) }
+            }
+        }
+        
+        // Function to check if component has failed dependencies
+        def hasFailedDependencies = { component ->
+            def deps = componentDeps[component]
+            if (deps == null || deps.isEmpty()) {
+                return false
+            }
+            synchronized(statusLock) {
+                return deps.any { dep -> failed.contains(dep) }
+            }
+        }
+        
+        // Function to build a single component
+        def buildComponent = { component ->
+            def stageName = component.toUpperCase()
+            
+            stage(stageName) {
+                try {
+                    echo '********************************************************************************'
+                    echo "**  COMPONENT STAGE: ${stageName}"
+                    echo '********************************************************************************'
+                    
+                    def componentConfig = ['hadoop': ['description': 'Apache Hadoop - Distributed storage and processing', 'tasks': ['hadoop-clean', 'hadoop-rpm']], 'hue': ['description': 'Hue - Hadoop User Experience', 'tasks': ['hue-clean', 'hue-rpm']], 'kafka': ['description': 'Apache Kafka - Distributed streaming platform', 'tasks': ['kafka-clean', 'kafka-rpm']], 'zookeeper': ['description': 'Apache ZooKeeper - Distributed coordination service', 'tasks': ['zookeeper-clean', 'zookeeper-rpm']]][component]
+                    echo "**  Description: ${componentConfig.description}"
+                    echo "**  Gradle Tasks: ${componentConfig.tasks.join(', ')}"
+                    
+                    def deps = componentDeps[component]
+                    if (deps && !deps.isEmpty()) {
+                        echo "**  Dependencies: ${deps.join(', ')}"
+                    } else {
+                        echo "**  Dependencies: None"
+                    }
+                    
+                    echo '********************************************************************************'
+                    echo ''
+                    
+                    // Execute the build
+                    sh """
+                        python3 src/main.py \\
+                            --release ODP-3.3.6.3-1 \\
+                            --components ${component} \\
+                            --bigtop-branch rel/ODP-3.3.6.3-1 \\
+                            --docker-image repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6 \\
+                            --kubeconfig ${KUBECONFIG} \\
+                            --non-interactive
+                    """
+                    
+                    // Mark as completed
+                    synchronized(statusLock) {
+                        completed.add(component)
+                        inProgress.remove(component)
+                    }
+                    
+                    echo ''
+                    echo "[${component}] ✓ BUILD SUCCESSFUL"
+                    echo '********************************************************************************'
+                    echo "[${component}] END OF COMPONENT STAGE - SUCCESS"
+                    echo '********************************************************************************'
+                    echo ''
+                    
+                } catch (Exception e) {
+                    // Mark as failed
+                    synchronized(statusLock) {
+                        failed.add(component)
+                        inProgress.remove(component)
+                    }
+                    
+                    echo ''
+                    echo "[${component}] ✗ BUILD FAILED: ${e.message}"
+                    echo '********************************************************************************'
+                    echo "[${component}] END OF COMPONENT STAGE - FAILED"
+                    echo '********************************************************************************'
+                    echo ''
+                    
+                    // Don't throw - let other components continue
+                }
+            }
+        }
+        
+        // Main build loop - dynamic triggering
+        echo '=' * 80
+        echo 'STARTING DYNAMIC BUILD EXECUTION'
+        echo '=' * 80
+        echo ''
+        
+        def futures = [:]
+        
+        while (!remaining.isEmpty() || !inProgress.isEmpty()) {
+            
+            // Find components ready to build
+            def readyToBuild = []
+            synchronized(statusLock) {
+                remaining.each { component ->
+                    if (!inProgress.contains(component)) {
+                        if (hasFailedDependencies(component)) {
+                            def deps = componentDeps[component]
+                            def failedDeps = deps.findAll { failed.contains(it) }
+                            echo "⊗ Skipping ${component}: dependencies failed: ${failedDeps.join(', ')}"
+                            skipped.add(component)
+                            remaining.remove(component)
+                        } else if (dependenciesMet(component)) {
+                            readyToBuild.add(component)
+                        }
+                    }
+                }
+            }
+            
+            // Launch builds for ready components
+            if (!readyToBuild.isEmpty()) {
+                readyToBuild.each { component ->
+                    synchronized(statusLock) {
+                        inProgress.add(component)
+                        remaining.remove(component)
+                    }
+                    
+                    echo "[${component}] Dependencies met, starting build..."
+                    
+                    // Launch build in parallel
+                    def comp = component  // Capture variable for closure
+                    futures[comp] = {
+                        buildComponent(comp)
+                    }
+                }
+                
+                // Execute all ready builds in parallel
+                if (!futures.isEmpty()) {
+                    parallel futures
+                    futures = [:]
+                }
+            }
+            
+            // Check if we're stuck (remaining components but none ready)
+            if (readyToBuild.isEmpty() && !remaining.isEmpty() && inProgress.isEmpty()) {
+                synchronized(statusLock) {
+                    remaining.each { component ->
+                        def deps = componentDeps[component]
+                        def unmet = deps.findAll { !completed.contains(it) }
+                        echo "⊗ Skipping ${component}: unmet dependencies: ${unmet.join(', ')}"
+                        skipped.add(component)
+                    }
+                    remaining.clear()
+                }
+                break
+            }
+            
+            // Small delay to prevent tight loop if nothing is ready yet
+            if (readyToBuild.isEmpty() && !inProgress.isEmpty()) {
+                sleep(time: 1, unit: 'SECONDS')
+            }
+        }
+        
+        // Final summary
+        echo ''
+        echo '=' * 80
+        echo 'BUILD COMPLETE'
+        echo '=' * 80
+        
+        if (!completed.isEmpty()) {
+            echo "✓ Successfully built (${completed.size()}): ${completed.join(', ')}"
+        }
+        if (!skipped.isEmpty()) {
+            echo "⊗ Skipped (${skipped.size()}): ${skipped.join(', ')}"
+        }
+        if (!failed.isEmpty()) {
+            echo "✗ Failed (${failed.size()}): ${failed.join(', ')}"
+        }
+        echo '=' * 80
+        
+        // Fail the build if any component failed
+        if (!failed.isEmpty()) {
+            error("Build failed: ${failed.join(', ')}")
+        }
+    }
+}
+

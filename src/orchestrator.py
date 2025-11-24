@@ -1,12 +1,13 @@
 """
 Build Orchestrator
-Manages dependency resolution and sequential build execution for ODP components
+Manages dependency resolution and parallel build execution for ODP components
 """
 
 import logging
 import time
 import sys
 from typing import Dict, List, Set
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class BuildOrchestrator:
     """Orchestrates component builds with dependency management"""
     
-    def __init__(self, k8s_manager, components_config: Dict, release_config: Dict, interactive: bool = True):
+    def __init__(self, k8s_manager, components_config: Dict, release_config: Dict, interactive: bool = True, stream_logs: bool = False):
         """
         Initialize the Build Orchestrator
         
@@ -24,18 +25,21 @@ class BuildOrchestrator:
             components_config: Component configurations
             release_config: Release configuration
             interactive: Whether to prompt user for retry/skip on failures
+            stream_logs: Whether to stream logs in real-time during builds
         """
         self.k8s_manager = k8s_manager
         self.components_config = components_config
         self.release_config = release_config
         self.namespace = release_config['namespace']
         self.interactive = interactive
+        self.stream_logs = stream_logs
         
         self.completed = set()  # Successfully completed components
         self.failed = set()  # Failed components
         self.skipped = set()  # Skipped components
         self.in_progress = set()  # Currently building components
         self.lock = threading.Lock()  # Thread safety for shared state
+        self.component_stage_counter = 0  # Counter for component stages
         
     def get_all_components(self) -> List[str]:
         """Get list of all available components"""
@@ -93,16 +97,16 @@ class BuildOrchestrator:
                     return False
             return True
     
-    def get_build_order(self, components: List[str]) -> List[str]:
+    def get_build_order(self, components: List[str]) -> List[List[str]]:
         """
         Calculate build order based on dependencies
-        Returns a list where each component is built sequentially
+        Returns a list of stages, where each stage contains components that can be built in parallel
         
         Args:
             components: List of component names to build
             
         Returns:
-            List of components in build order
+            List of build stages, each stage is a list of components that can be built in parallel
         """
         remaining = set(components)
         completed = set()
@@ -129,7 +133,7 @@ class BuildOrchestrator:
             
             # Sort components by name for consistent ordering
             ready.sort()
-            build_order.extend(ready)
+            build_order.append(ready)
             completed.update(ready)
             remaining -= set(ready)
         
@@ -156,11 +160,10 @@ class BuildOrchestrator:
             else:
                 logger.info(f"  • {component}: {desc} (no dependencies)")
         
-        logger.info("\nBuild order (sequential):")
-        build_order = self.get_build_order(components)
-        for i, component in enumerate(build_order, 1):
-            logger.info(f"  Stage {i}: {component}")
-        
+        logger.info("\nBuild strategy:")
+        logger.info("  - Components will be built dynamically as dependencies are met")
+        logger.info("  - Multiple components can build in parallel when dependencies allow")
+        logger.info("  - Each component gets its own stage")
         logger.info("=" * 80)
     
     def prompt_user_action(self, component: str) -> str:
@@ -201,12 +204,42 @@ class BuildOrchestrator:
                 logger.info("\nReceived interrupt, aborting build...")
                 return 'abort'
     
-    def build_component(self, component: str) -> bool:
+    def print_component_stage_header(self, component: str, stage_label: str = None):
+        """
+        Print a clear stage header for a component
+        
+        Args:
+            component: Component name
+            stage_label: Optional stage label (e.g., "Stage 1 of 4")
+        """
+        with self.lock:
+            self.component_stage_counter += 1
+            stage_num = self.component_stage_counter
+        
+        config = self.components_config[component]
+        deps = self.get_dependencies(component)
+        
+        logger.info("\n")
+        logger.info("*" * 80)
+        logger.info("*" * 80)
+        if stage_label:
+            logger.info(f"**  {stage_label}")
+        logger.info(f"**  COMPONENT STAGE: {component.upper()}")
+        logger.info("*" * 80)
+        logger.info(f"**  Description: {config.get('description', 'N/A')}")
+        logger.info(f"**  Gradle Tasks: {', '.join(config['gradle_tasks'])}")
+        logger.info(f"**  Dependencies: {', '.join(deps) if deps else 'None'}")
+        logger.info("*" * 80)
+        logger.info("*" * 80)
+        logger.info("")
+    
+    def build_component(self, component: str, stage_label: str = None) -> bool:
         """
         Build a single component with retry/skip functionality
         
         Args:
             component: Component name
+            stage_label: Optional stage label for logging
             
         Returns:
             True if build succeeded, False otherwise
@@ -219,83 +252,145 @@ class BuildOrchestrator:
         
         while True:
             attempt += 1
-            attempt_suffix = f" (Attempt {attempt})" if attempt > 1 else ""
             
-            logger.info("=" * 80)
-            logger.info(f"BUILDING: {component}{attempt_suffix}")
-            logger.info("=" * 80)
-            logger.info(f"Description: {config.get('description', 'N/A')}")
-            logger.info(f"Gradle tasks: {', '.join(config['gradle_tasks'])}")
-            logger.info(f"Dependencies: {', '.join(self.get_dependencies(component)) or 'None'}")
-            logger.info("=" * 80)
+            # Print component stage header
+            if attempt == 1:
+                self.print_component_stage_header(component, stage_label)
+            else:
+                logger.info(f"\n{'=' * 80}")
+                logger.info(f"RETRY ATTEMPT {attempt} for {component}")
+                logger.info(f"{'=' * 80}\n")
+            
+            logger.info(f"[{component}] Launching Kubernetes job: {job_name}")
+            logger.info(f"[{component}] Namespace: {self.namespace}")
+            logger.info(f"[{component}] Docker Image: {self.release_config['docker_image']}")
+            logger.info(f"[{component}] Bigtop Branch: {self.release_config['bigtop_branch']}")
+            logger.info("")
             
             # Launch the job
             if not self.k8s_manager.launch_job(component, config, self.release_config):
-                logger.error(f"✗ Failed to launch job for {component}")
+                logger.error(f"[{component}] ✗ Failed to launch job")
                 
                 action = self.prompt_user_action(component)
                 if action == 'retry':
-                    logger.info(f"Retrying build for {component}...")
+                    logger.info(f"[{component}] Retrying build...")
                     continue
                 elif action == 'skip':
                     with self.lock:
                         self.skipped.add(component)
-                    logger.warning(f"⊗ Skipped {component}")
+                    logger.warning(f"[{component}] ⊗ Skipped")
+                    logger.info(f"\n{'*' * 80}")
+                    logger.info(f"[{component}] END OF COMPONENT STAGE")
+                    logger.info(f"{'*' * 80}\n")
                     return False
                 else:  # abort
                     with self.lock:
                         self.failed.add(component)
                     raise KeyboardInterrupt("Build aborted by user")
+            
+            logger.info(f"[{component}] ✓ Job launched successfully")
+            logger.info(f"[{component}] Waiting for build to complete...")
+            logger.info("")
+            
+            # Stream logs if enabled
+            if self.stream_logs:
+                logger.info(f"[{component}] " + "=" * 70)
+                logger.info(f"[{component}] BUILD LOGS (streaming)")
+                logger.info(f"[{component}] " + "=" * 70)
+                logger.info("")
             
             # Wait for completion with status updates
             success = self.k8s_manager.wait_for_job(
                 job_name, 
                 self.namespace,
                 timeout=3600,  # 1 hour timeout per component
-                check_interval=30
+                check_interval=30,
+                component_prefix=f"[{component}]",
+                stream_logs=self.stream_logs
             )
             
             if success:
                 with self.lock:
                     self.completed.add(component)
                     self.in_progress.discard(component)
-                logger.info(f"✓ Successfully built {component}")
+                logger.info("")
+                logger.info(f"[{component}] ✓ BUILD SUCCESSFUL")
+                logger.info(f"\n{'*' * 80}")
+                logger.info(f"[{component}] END OF COMPONENT STAGE - SUCCESS")
+                logger.info(f"{'*' * 80}\n")
                 return True
             else:
                 # Build failed
+                logger.info("")
+                logger.info(f"[{component}] ✗ BUILD FAILED")
+                
                 if attempt <= max_auto_retries:
-                    logger.warning(f"Build failed for {component}, retrying...")
-                    time.sleep(5)  # Brief pause before retry
+                    logger.warning(f"[{component}] Retrying after 5 seconds...")
+                    time.sleep(5)
                     continue
                 
                 # Prompt user for action
                 action = self.prompt_user_action(component)
                 if action == 'retry':
-                    logger.info(f"Retrying build for {component}...")
+                    logger.info(f"[{component}] Retrying build...")
                     continue
                 elif action == 'skip':
                     with self.lock:
                         self.skipped.add(component)
                         self.in_progress.discard(component)
-                    logger.warning(f"⊗ Skipped {component}")
+                    logger.warning(f"[{component}] ⊗ Skipped by user")
+                    logger.info(f"\n{'*' * 80}")
+                    logger.info(f"[{component}] END OF COMPONENT STAGE - SKIPPED")
+                    logger.info(f"{'*' * 80}\n")
                     return False
                 else:  # abort
                     with self.lock:
                         self.failed.add(component)
                         self.in_progress.discard(component)
-                    logger.error(f"✗ Failed to build {component}")
+                    logger.error(f"[{component}] ✗ Failed")
+                    logger.info(f"\n{'*' * 80}")
+                    logger.info(f"[{component}] END OF COMPONENT STAGE - FAILED")
+                    logger.info(f"{'*' * 80}\n")
                     raise KeyboardInterrupt("Build aborted by user")
+    
+    def build_component_wrapper(self, component: str, total_components: int) -> bool:
+        """
+        Wrapper around build_component that manages stage numbering
+        
+        Args:
+            component: Component name
+            total_components: Total number of components to build
+            
+        Returns:
+            True if build succeeded, False otherwise
+        """
+        with self.lock:
+            self.component_stage_counter += 1
+            stage_num = self.component_stage_counter
+        
+        stage_label = f"Component {stage_num} of {total_components}"
+        
+        try:
+            return self.build_component(component, stage_label)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            logger.error(f"[{component}] ✗ Unexpected error: {e}", exc_info=True)
+            with self.lock:
+                self.failed.add(component)
+                self.in_progress.discard(component)
+            return False
     
     def build_all(self, components: List[str]) -> bool:
         """
-        Build all specified components in the correct order, sequentially
-        Components with unmet dependencies will be skipped automatically
+        Build all specified components with dynamic dependency-based triggering
+        Components start building as soon as their dependencies are met
         
         Args:
             components: List of component names to build
             
         Returns:
-            True if all builds succeeded, False if any failed
+            True if at least one component succeeded and no hard failures, False otherwise
         """
         # Validate components
         valid_components = self.validate_components(components)
@@ -306,52 +401,100 @@ class BuildOrchestrator:
         # Print build plan
         self.print_build_plan(valid_components)
         
-        # Get build order
-        try:
-            build_order = self.get_build_order(valid_components)
-        except ValueError as e:
-            logger.error(f"Error calculating build order: {e}")
-            return False
+        total_components = len(valid_components)
+        remaining = set(valid_components)
         
-        # Build each component sequentially
-        total_components = len(build_order)
+        # Use ThreadPoolExecutor to manage parallel builds
+        max_parallel = min(len(valid_components), 10)  # Max 10 parallel builds
         
-        for stage_num, component in enumerate(build_order, 1):
-            logger.info(f"\n{'#' * 80}")
-            logger.info(f"# STAGE {stage_num} of {total_components}: {component}")
-            logger.info(f"{'#' * 80}\n")
+        logger.info(f"\n{'=' * 80}")
+        logger.info("STARTING DYNAMIC BUILD EXECUTION")
+        logger.info(f"{'=' * 80}\n")
+        
+        with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            futures = {}  # Future -> component mapping
             
-            # Check if dependencies are met
-            if not self.dependencies_met(component, valid_components):
-                unmet_deps = [dep for dep in self.get_dependencies(component) 
-                             if dep in valid_components and dep not in self.completed]
-                logger.warning(f"⊗ Skipping {component}: unmet dependencies: {', '.join(unmet_deps)}")
-                with self.lock:
-                    self.skipped.add(component)
-                continue
-            
-            # Build the component
             try:
-                with self.lock:
-                    self.in_progress.add(component)
-                
-                success = self.build_component(component)
-                
-                if not success:
-                    # Component was skipped or failed, but we continue with remaining components
-                    logger.info(f"\nContinuing with remaining components despite {component} failure/skip...")
+                while remaining or futures:
+                    # Check which components are ready to build
+                    ready_to_build = []
+                    with self.lock:
+                        for component in list(remaining):
+                            # Skip if already in progress or dependencies not met
+                            if component in self.in_progress:
+                                continue
+                            
+                            if self.dependencies_met(component, valid_components):
+                                # Check if dependencies failed
+                                deps = self.get_dependencies(component)
+                                failed_deps = [d for d in deps if d in valid_components and d in self.failed]
+                                if failed_deps:
+                                    logger.warning(f"⊗ Skipping {component}: dependencies failed: {', '.join(failed_deps)}")
+                                    self.skipped.add(component)
+                                    remaining.discard(component)
+                                    continue
+                                
+                                ready_to_build.append(component)
                     
+                    # Submit new builds for ready components
+                    for component in ready_to_build:
+                        with self.lock:
+                            self.in_progress.add(component)
+                        remaining.discard(component)
+                        
+                        logger.info(f"[{component}] Dependencies met, starting build...")
+                        future = executor.submit(self.build_component_wrapper, component, total_components)
+                        futures[future] = component
+                    
+                    # Check for completed builds
+                    if futures:
+                        # Wait for at least one build to complete
+                        done_futures = []
+                        for future in list(futures.keys()):
+                            if future.done():
+                                done_futures.append(future)
+                        
+                        if not done_futures and not ready_to_build:
+                            # Wait a bit for something to complete
+                            time.sleep(1)
+                            continue
+                        
+                        for future in done_futures:
+                            component = futures[future]
+                            try:
+                                success = future.result()
+                                # Success/failure already recorded in build_component_wrapper
+                            except KeyboardInterrupt:
+                                logger.error("\n\nBuild aborted by user")
+                                # Cancel remaining futures
+                                for f in futures:
+                                    f.cancel()
+                                raise
+                            except Exception as e:
+                                logger.error(f"[{component}] ✗ Unexpected error: {e}", exc_info=True)
+                                with self.lock:
+                                    self.failed.add(component)
+                                    self.in_progress.discard(component)
+                            
+                            del futures[future]
+                    
+                    # If nothing is ready and nothing is running, we're stuck
+                    if not ready_to_build and not futures and remaining:
+                        # Remaining components have unmet dependencies
+                        with self.lock:
+                            for component in remaining:
+                                deps = self.get_dependencies(component)
+                                unmet = [d for d in deps if d in valid_components and d not in self.completed]
+                                if unmet:
+                                    logger.warning(f"⊗ Skipping {component}: unmet dependencies: {', '.join(unmet)}")
+                                    self.skipped.add(component)
+                        break
+                        
             except KeyboardInterrupt:
                 logger.error("\n\nBuild aborted by user")
                 return False
-            except Exception as e:
-                logger.error(f"\n✗ Unexpected error building {component}: {e}", exc_info=True)
-                with self.lock:
-                    self.failed.add(component)
-                    self.in_progress.discard(component)
-                return False
         
-        # All stages attempted
+        # All builds attempted
         logger.info("\n" + "=" * 80)
         logger.info("BUILD COMPLETE")
         logger.info("=" * 80)
