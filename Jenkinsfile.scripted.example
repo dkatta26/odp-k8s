@@ -2,7 +2,7 @@
 // Generated automatically - each component starts as soon as its dependencies complete
 // This WILL start hadoop/kafka as soon as zookeeper completes (won't wait for hue)
 
-node('k8s-build-agent') {
+node('dev-build-deploy-hz') {
     
     // Environment setup
     withCredentials([file(credentialsId: 'odp-hz-kubeconfig', variable: 'KUBECONFIG')]) {

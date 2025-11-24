@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'dev-build-deploy-hz' }
     
     parameters {
         string(
