@@ -141,6 +141,12 @@ Examples:
         help='Show build plan without executing'
     )
     
+    parser.add_argument(
+        '--non-interactive',
+        action='store_true',
+        help='Non-interactive mode: skip failed builds automatically without prompting'
+    )
+    
     args = parser.parse_args()
     
     # Setup logging
@@ -156,6 +162,7 @@ Examples:
     logger.info(f"Components: {args.components or 'ALL'}")
     logger.info(f"Kubeconfig: {args.kubeconfig}")
     logger.info(f"Dry Run: {args.dry_run}")
+    logger.info(f"Interactive Mode: {not args.non_interactive}")
     logger.info("=" * 80)
     
     try:
@@ -230,7 +237,8 @@ Examples:
         orchestrator = BuildOrchestrator(
             k8s_manager,
             components_config['components'],
-            release_config
+            release_config,
+            interactive=not args.non_interactive
         )
         
         # Dry run - just show the plan
@@ -252,11 +260,14 @@ Examples:
         logger.info("FINAL SUMMARY")
         logger.info("=" * 80)
         logger.info(f"Completed: {summary['total_completed']}")
+        logger.info(f"Skipped: {summary['total_skipped']}")
         logger.info(f"Failed: {summary['total_failed']}")
         if summary['completed']:
             logger.info(f"✓ {', '.join(summary['completed'])}")
+        if summary['skipped']:
+            logger.warning(f"⊗ {', '.join(summary['skipped'])}")
         if summary['failed']:
-            logger.info(f"✗ {', '.join(summary['failed'])}")
+            logger.error(f"✗ {', '.join(summary['failed'])}")
         logger.info("=" * 80)
         
         if success:
