@@ -9,7 +9,7 @@ import logging
 import sys
 import yaml
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent))
