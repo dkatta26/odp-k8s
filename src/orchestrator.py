@@ -411,6 +411,9 @@ class BuildOrchestrator:
         logger.info("STARTING DYNAMIC BUILD EXECUTION")
         logger.info(f"{'=' * 80}\n")
         
+        logger.info(f"Total components to build: {total_components}")
+        logger.info(f"Remaining components: {', '.join(sorted(remaining))}\n")
+        
         with ThreadPoolExecutor(max_workers=max_parallel) as executor:
             futures = {}  # Future -> component mapping
             
@@ -422,6 +425,7 @@ class BuildOrchestrator:
                         for component in list(remaining):
                             # Skip if already in progress or dependencies not met
                             if component in self.in_progress:
+                                logger.debug(f"[{component}] Already in progress, skipping")
                                 continue
                             
                             if self.dependencies_met(component, valid_components):
@@ -434,9 +438,17 @@ class BuildOrchestrator:
                                     remaining.discard(component)
                                     continue
                                 
+                                logger.info(f"[{component}] Ready to build (dependencies met)")
                                 ready_to_build.append(component)
+                            else:
+                                deps = self.get_dependencies(component)
+                                unmet = [d for d in deps if d in valid_components and d not in self.completed]
+                                logger.debug(f"[{component}] Not ready - waiting for: {', '.join(unmet)}")
                     
                     # Submit new builds for ready components
+                    if ready_to_build:
+                        logger.info(f"\nSubmitting {len(ready_to_build)} component(s) for build: {', '.join(ready_to_build)}\n")
+                    
                     for component in ready_to_build:
                         with self.lock:
                             self.in_progress.add(component)
@@ -456,6 +468,7 @@ class BuildOrchestrator:
                         
                         if not done_futures and not ready_to_build:
                             # Wait a bit for something to complete
+                            logger.debug(f"Waiting for builds to complete... (in progress: {len(futures)})")
                             time.sleep(1)
                             continue
                         
@@ -463,6 +476,7 @@ class BuildOrchestrator:
                             component = futures[future]
                             try:
                                 success = future.result()
+                                logger.info(f"[{component}] Build completed with status: {'success' if success else 'failed/skipped'}")
                                 # Success/failure already recorded in build_component_wrapper
                             except KeyboardInterrupt:
                                 logger.error("\n\nBuild aborted by user")
@@ -477,6 +491,10 @@ class BuildOrchestrator:
                                     self.in_progress.discard(component)
                             
                             del futures[future]
+                    elif not ready_to_build and remaining:
+                        # Nothing ready but still have remaining components
+                        logger.debug(f"No components ready, remaining: {len(remaining)}, in_progress: {len(self.in_progress)}")
+                        time.sleep(1)
                     
                     # If nothing is ready and nothing is running, we're stuck
                     if not ready_to_build and not futures and remaining:
