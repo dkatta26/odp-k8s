@@ -40,7 +40,7 @@ class BuildOrchestrator:
         self.failed = set()  # Failed components
         self.skipped = set()  # Skipped components
         self.in_progress = set()  # Currently building components
-        self.lock = threading.Lock()  # Thread safety for shared state
+        self.lock = threading.RLock()  # Thread safety for shared state (RLock allows re-entrance)
         
     def get_dependencies(self, component: str) -> List[str]:
         """Get dependencies for a component"""
@@ -273,21 +273,29 @@ class BuildOrchestrator:
         logger.info(f"\n{'=' * 80}")
         logger.info("STARTING DYNAMIC BUILD EXECUTION")
         logger.info(f"Max parallel builds: {max_parallel}")
+        logger.info(f"Initial remaining: {remaining}")
         logger.info(f"{'=' * 80}\n")
         
         try:
             with ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 futures = {}  # Future -> component mapping
                 
+                logger.info("Entered main build loop...")
+                
                 while remaining or futures:
                     logger.info(f"Status check: {len(remaining)} remaining, {len(futures)} building, {len(self.completed)} completed")
+                    logger.info(f"Remaining components: {remaining}")
+                    logger.info(f"In progress: {self.in_progress}")
                     
                     # Find components ready to build
                     ready = []
                     with self.lock:
                         for component in list(remaining):
+                            logger.debug(f"Checking {component}...")
+                            
                             # Skip if already building
                             if component in self.in_progress:
+                                logger.debug(f"  {component} already in progress, skipping")
                                 continue
                             
                             # Check for failed dependencies
@@ -301,10 +309,14 @@ class BuildOrchestrator:
                                 continue
                             
                             # Check if dependencies met
-                            if self.dependencies_met(component, valid_components):
+                            deps_met = self.dependencies_met(component, valid_components)
+                            logger.debug(f"  {component} dependencies met: {deps_met}")
+                            if deps_met:
                                 ready.append(component)
                     
                     # Submit new builds
+                    logger.info(f"Found {len(ready)} components ready to build: {ready}")
+                    
                     for component in ready:
                         with self.lock:
                             self.in_progress.add(component)
@@ -312,8 +324,15 @@ class BuildOrchestrator:
                         remaining.discard(component)
                         
                         logger.info(f"[{component}] Dependencies met, scheduling build...")
-                        future = executor.submit(self.build_component, component, total_components, component_counter)
-                        futures[future] = component
+                        try:
+                            future = executor.submit(self.build_component, component, total_components, component_counter)
+                            futures[future] = component
+                            logger.info(f"[{component}] Build submitted successfully")
+                        except Exception as e:
+                            logger.error(f"[{component}] Failed to submit build: {e}", exc_info=True)
+                            with self.lock:
+                                self.failed.add(component)
+                                self.in_progress.discard(component)
                     
                     # Wait for at least one to complete
                     if futures:
@@ -363,6 +382,11 @@ class BuildOrchestrator:
                                     logger.error(f"  {component} waiting for: {', '.join(unmet)}")
                                 self.skipped.add(component)
                         break
+                    
+                    # Safety sleep to prevent busy-waiting
+                    if not ready and not futures:
+                        logger.debug("No ready components and no active builds, waiting...")
+                        time.sleep(2)
                     
         except KeyboardInterrupt:
             logger.error("\n\nBuild aborted by user")
