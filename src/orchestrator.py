@@ -280,6 +280,8 @@ class BuildOrchestrator:
                 futures = {}  # Future -> component mapping
                 
                 while remaining or futures:
+                    logger.info(f"Status check: {len(remaining)} remaining, {len(futures)} building, {len(self.completed)} completed")
+                    
                     # Find components ready to build
                     ready = []
                     with self.lock:
