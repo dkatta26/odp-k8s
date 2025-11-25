@@ -5,34 +5,26 @@ components:
   zookeeper:
     name: zookeeper
     description: "Apache ZooKeeper - Distributed coordination service"
-    gradle_tasks:
-      - zookeeper-clean
-      - zookeeper-rpm
+    build_command: "zookeeper-clean && zookeeper-rpm --info"
     dependencies: []
     
   hadoop:
     name: hadoop
     description: "Apache Hadoop - Distributed storage and processing"
-    gradle_tasks:
-      - hadoop-clean
-      - hadoop-rpm
+    build_command: "hadoop-clean && hadoop-rpm --info"
     dependencies:
       - zookeeper
       
   hue:
     name: hue
     description: "Hue - Hadoop User Experience"
-    gradle_tasks:
-      - hue-clean
-      - hue-rpm
+    build_command: "hue-clean && hue-rpm --info"
     dependencies: []
     
   kafka:
     name: kafka
     description: "Apache Kafka - Distributed streaming platform"
-    gradle_tasks:
-      - kafka-clean
-      - kafka-rpm
+    build_command: "kafka-clean && kafka-rpm --info"
     dependencies:
       - zookeeper
 

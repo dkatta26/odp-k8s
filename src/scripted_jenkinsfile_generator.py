@@ -100,7 +100,7 @@ node('k8s-build-agent') {{
                     
                     def componentConfig = {repr(self.get_component_configs(components))}[component]
                     echo "**  Description: ${{componentConfig.description}}"
-                    echo "**  Gradle Tasks: ${{componentConfig.tasks.join(', ')}}"
+                    echo "**  Build Command: ${{componentConfig.build_command}}"
                     
                     def deps = componentDeps[component]
                     if (deps && !deps.isEmpty()) {{
@@ -269,7 +269,7 @@ node('k8s-build-agent') {{
             config = self.components_config[comp]
             configs[comp] = {
                 'description': config.get('description', 'N/A'),
-                'tasks': config['gradle_tasks']
+                'build_command': config.get('build_command', '')
             }
         return configs
     

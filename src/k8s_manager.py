@@ -136,15 +136,8 @@ class KubernetesJobManager:
         Returns:
             YAML string for the Job
         """
-        gradle_tasks = config['gradle_tasks']
+        build_command = config.get('build_command', '')
         job_name = f"{component}-build"
-        
-        # Build the gradle command string
-        gradle_commands = []
-        for task in gradle_tasks:
-            gradle_commands.append(f'./gradlew {task} --info')
-        
-        gradle_command_str = '\n'.join(gradle_commands)
         
         # Generate bash script for the container
         bash_script = f"""set -euo pipefail
@@ -154,7 +147,7 @@ echo "Starting build for component: {component}"
 echo "============================================"
 echo "Bigtop Branch: {release_config['bigtop_branch']}"
 echo "Docker Image: {release_config['docker_image']}"
-echo "Gradle Tasks: {', '.join(gradle_tasks)}"
+echo "Build Command: {build_command}"
 echo "============================================"
 
 echo ""
@@ -172,9 +165,9 @@ git clone -b {release_config['bigtop_branch']} {release_config['github_repo']} |
 cd odp-bigtop
 
 echo ""
-echo "[INFO] Starting Gradle build for {component}"
+echo "[INFO] Starting build for {component}"
 echo "============================================"
-{gradle_command_str}
+{build_command}
 
 echo ""
 echo "============================================"

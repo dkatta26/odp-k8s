@@ -160,7 +160,7 @@ class BuildOrchestrator:
                 logger.info(f"**  ATTEMPT: {attempt}")
             logger.info("*" * 80)
             logger.info(f"**  Description: {config.get('description', 'N/A')}")
-            logger.info(f"**  Gradle Tasks: {', '.join(config['gradle_tasks'])}")
+            logger.info(f"**  Build Command: {config.get('build_command', 'N/A')}")
             deps = self.get_dependencies(component)
             logger.info(f"**  Dependencies: {', '.join(deps) if deps else 'None'}")
             logger.info("*" * 80)

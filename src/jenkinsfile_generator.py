@@ -81,7 +81,7 @@ class JenkinsfileGenerator:
             Jenkins stage definition as string
         """
         config = self.components_config[component]
-        gradle_tasks = config['gradle_tasks']
+        build_command = config.get('build_command', '')
         
         ind = ' ' * indent
         
@@ -94,7 +94,7 @@ class JenkinsfileGenerator:
         stage_def += f"{ind}            echo '**  COMPONENT STAGE: {component.upper()}'\n"
         stage_def += f"{ind}            echo '{'*' * 80}'\n"
         stage_def += f"{ind}            echo '**  Description: {config.get('description', 'N/A')}'\n"
-        stage_def += f"{ind}            echo '**  Gradle Tasks: {', '.join(gradle_tasks)}'\n"
+        stage_def += f"{ind}            echo '**  Build Command: {build_command}'\n"
         
         deps = self.get_dependencies(component)
         if deps:
@@ -148,13 +148,13 @@ class JenkinsfileGenerator:
             stage_def += f"                script {{\n"
             component = components[0]
             config = self.components_config[component]
-            gradle_tasks = config['gradle_tasks']
+            build_command = config.get('build_command', '')
             
             stage_def += f"                    echo '{'*' * 80}'\n"
             stage_def += f"                    echo '**  COMPONENT STAGE: {component.upper()}'\n"
             stage_def += f"                    echo '{'*' * 80}'\n"
             stage_def += f"                    echo '**  Description: {config.get('description', 'N/A')}'\n"
-            stage_def += f"                    echo '**  Gradle Tasks: {', '.join(gradle_tasks)}'\n"
+            stage_def += f"                    echo '**  Build Command: {build_command}'\n"
             
             deps = self.get_dependencies(component)
             if deps:
