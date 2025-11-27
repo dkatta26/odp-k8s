@@ -159,7 +159,11 @@ class BuildOrchestrator:
             if attempt > 1:
                 logger.info(f"**  ATTEMPT: {attempt}")
             logger.info("*" * 80)
+            is_p1 = config.get('is_p1', False)
+            logger.info(f"**  Type: {'P1 (Separate Repository)' if is_p1 else 'Standard (odp-bigtop)'}")
             logger.info(f"**  Description: {config.get('description', 'N/A')}")
+            if is_p1:
+                logger.info(f"**  Repository: {config.get('github_repo', 'N/A')}")
             logger.info(f"**  Build Command: {config.get('build_command', 'N/A')}")
             deps = self.get_dependencies(component)
             logger.info(f"**  Dependencies: {', '.join(deps) if deps else 'None'}")
@@ -170,7 +174,7 @@ class BuildOrchestrator:
             logger.info(f"[{component}] Launching Kubernetes job: {job_name}")
             logger.info(f"[{component}] Namespace: {self.namespace}")
             logger.info(f"[{component}] Docker Image: {self.release_config['docker_image']}")
-            logger.info(f"[{component}] Bigtop Branch: {self.release_config['bigtop_branch']}")
+            logger.info(f"[{component}] Branch: {self.release_config['bigtop_branch']}")
             logger.info("")
             
             # Launch the job

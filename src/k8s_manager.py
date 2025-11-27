@@ -138,13 +138,59 @@ class KubernetesJobManager:
         """
         build_command = config.get('build_command', '')
         job_name = f"{component}-build"
+        is_p1 = config.get('is_p1', False)
         
         # Generate bash script for the container
-        bash_script = f"""set -euo pipefail
+        if is_p1:
+            # P1 components - built from their own repositories
+            p1_repo = config.get('github_repo')
+            p1_repo_name = p1_repo.split('/')[-1].replace('.git', '')
+            
+            bash_script = f"""set -euo pipefail
+
+echo "============================================"
+echo "Starting P1 build for component: {component}"
+echo "============================================"
+echo "Component Type: P1 (separate repository)"
+echo "Repository: {p1_repo}"
+echo "Branch: {release_config['bigtop_branch']}"
+echo "Docker Image: {release_config['docker_image']}"
+echo "Build Command: {build_command}"
+echo "============================================"
+
+echo ""
+echo "[INFO] Setting up SSH for git clones"
+ls -lh /root/.ssh/
+
+echo ""
+echo "[INFO] Cloning {component} repository"
+echo "[INFO] Repository: {p1_repo}"
+echo "[INFO] Branch: {release_config['bigtop_branch']}"
+git clone -b {release_config['bigtop_branch']} {p1_repo} || {{
+    echo "[ERROR] Failed to clone repository"
+    exit 1
+}}
+
+cd {p1_repo_name}
+
+echo ""
+echo "[INFO] Starting build for {component}"
+echo "============================================"
+{build_command}
+
+echo ""
+echo "============================================"
+echo "[SUCCESS] Build complete for {component}"
+echo "============================================"
+"""
+        else:
+            # Standard components - built from odp-bigtop repository
+            bash_script = f"""set -euo pipefail
 
 echo "============================================"
 echo "Starting build for component: {component}"
 echo "============================================"
+echo "Component Type: Standard (odp-bigtop)"
 echo "Bigtop Branch: {release_config['bigtop_branch']}"
 echo "Docker Image: {release_config['docker_image']}"
 echo "Build Command: {build_command}"

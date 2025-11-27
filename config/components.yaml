@@ -2,25 +2,22 @@
 # This file defines all available components and their build configurations
 
 components:
+  # P1 Components - Built from separate repositories
+  hbase-p1:
+    name: hbase-p1
+    description: "Apache HBase P1 - Required by Hadoop"
+    is_p1: true
+    github_repo: "git@github.com:acceldata-io/hbase.git"
+    build_command: "mvn clean deploy assembly:single -Prelease -DskipTests -Dhadoop.profile=3.0 -pl org.apache.hbase:hbase-common,org.apache.hbase:hbase-client,org.apache.hbase:hbase-server,org.apache.hbase:hbase-testing-util -am"
+    dependencies: []
+  
+  # Standard Components - Built from odp-bigtop repository
   zookeeper:
     name: zookeeper
     description: "Apache ZooKeeper - Distributed coordination service"
     build_command: "zookeeper-clean && zookeeper-rpm --info"
     dependencies: []
-    
-  hadoop:
-    name: hadoop
-    description: "Apache Hadoop - Distributed storage and processing"
-    build_command: "hadoop-clean && hadoop-rpm --info"
-    dependencies:
-      - zookeeper
-      
-  hue:
-    name: hue
-    description: "Hue - Hadoop User Experience"
-    build_command: "hue-clean && hue-rpm --info"
-    dependencies: []
-    
+
   kafka:
     name: kafka
     description: "Apache Kafka - Distributed streaming platform"
@@ -28,3 +25,18 @@ components:
     dependencies:
       - zookeeper
 
+  kafka3:
+    name: kafka3
+    description: "Apache Kafka3 - Distributed streaming platform"
+    build_command: "kafka3-clean && kafka3-rpm --info"
+    dependencies:
+      - zookeeper      
+    
+  hadoop:
+    name: hadoop
+    description: "Apache Hadoop - Distributed storage and processing"
+    build_command: "hadoop-clean && hadoop-rpm --info"
+    dependencies:
+      - zookeeper
+      - kafka3
+      - hbase-p1
