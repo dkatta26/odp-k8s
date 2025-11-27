@@ -56,6 +56,48 @@ components:
     build_command: "./gradlew zookeeper-clean && ./gradlew zookeeper-rpm --info"
     dependencies: []
 
+  airflow:
+    name: airflow
+    description: "Apache Airflow - Distributed workflow engine"
+    build_command: "./gradlew airflow-clean && ./gradlew airflow-rpm --info"
+    dependencies: []
+
+  bigtop-jsvc:  
+    name: bigtop-jsvc
+    description: "Apache Bigtop Jsvc - Distributed service manager"
+    build_command: "./gradlew bigtop-jsvc-clean && ./gradlew bigtop-jsvc-rpm --info"
+    dependencies: []
+
+  bigtop-utils:
+    name: bigtop-utils
+    description: "Apache Bigtop Utils - Distributed utilities"
+    build_command: "./gradlew bigtop-utils-clean && ./gradlew bigtop-utils-rpm --info"
+    dependencies: []
+  
+  clickhouse:
+    name: clickhouse
+    description: "Apache Clickhouse - Distributed streaming platform"
+    build_command: "./gradlew clickhouse-clean && ./gradlew clickhouse-rpm --info"
+    dependencies: []
+  
+  jupyterhub:
+    name: jupyterhub
+    description: "Apache JupyterHub - Distributed notebook"
+    build_command: "./gradlew jupyterhub-clean && ./gradlew jupyterhub-rpm --info"
+    dependencies: []
+
+  mlflow:  
+    name: mlflow
+    description: "Apache MLflow - Distributed machine learning platform"
+    build_command: "./gradlew mlflow-clean && ./gradlew mlflow-rpm --info"
+    dependencies: []
+
+  odp-select:
+    name: odp-select
+    description: "Apache ODP Select - Distributed streaming platform"
+    build_command: "./gradlew odp-select-clean && ./gradlew odp-select-rpm --info"
+    dependencies: []
+
   kafka:
     name: kafka
     description: "Apache Kafka - Distributed streaming platform"
@@ -331,18 +373,4 @@ components:
       - hbase
       - registry
       - kudu
-
-
-
-
-
-
-
-
-
-
-
-
-
-      
 
