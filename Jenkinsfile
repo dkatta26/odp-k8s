@@ -4,12 +4,12 @@ pipeline {
     parameters {
         string(
             name: 'REPO_URL',
-            defaultValue: 'https://github.com/your-org/odp-on-k8s.git',
+            defaultValue: 'git@github.com:acceldata-io/Jenkins.git',
             description: 'Git repository URL for the build orchestration repo'
         )
         string(
             name: 'REPO_BRANCH',
-            defaultValue: 'main',
+            defaultValue: 'build-deploy-k8s-ODP-3.3.6.3-1',
             description: 'Git branch to checkout'
         )
         string(
@@ -29,8 +29,8 @@ pipeline {
         )
         string(
             name: 'DOCKER_IMAGE',
-            defaultValue: 'repo1.acceldata.dev:8086/odp-images/build-env/rockylinux8:6',
-            description: 'Docker image to use for build environment'
+            defaultValue: '',
+            description: 'Docker image to use for build environment (REQUIRED)'
         )
         string(
             name: 'KUBECONFIG_PATH',
