@@ -10,6 +10,7 @@ components:
     github_repo: "git@github.com:acceldata-io/hbase.git"
     build_command: "mvn clean deploy assembly:single -Prelease -DskipTests -Dhadoop.profile=3.0 -pl org.apache.hbase:hbase-common,org.apache.hbase:hbase-client,org.apache.hbase:hbase-server,org.apache.hbase:hbase-testing-util -am"
     dependencies: 
+      - zookeeper
       - hadoop-p1
 
   hadoop-p1:
