@@ -9,8 +9,45 @@ components:
     is_p1: true
     github_repo: "git@github.com:acceldata-io/hbase.git"
     build_command: "mvn clean deploy assembly:single -Prelease -DskipTests -Dhadoop.profile=3.0 -pl org.apache.hbase:hbase-common,org.apache.hbase:hbase-client,org.apache.hbase:hbase-server,org.apache.hbase:hbase-testing-util -am"
-    dependencies: []
-  
+    dependencies: 
+      - hadoop-p1
+
+  hadoop-p1:
+    name: hadoop-p1
+    description: "Apache Hadoop P1 - Required by HBase"
+    is_p1: true
+    github_repo: "git@github.com:acceldata-io/hadoop.git"
+    build_command: "mvn clean deploy -pl 'hadoop-common-project/hadoop-common,hadoop-common-project/hadoop-minikdc,hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-core,hadoop-minicluster,hadoop-tools/hadoop-distcp' -am -Drequire.snappy=true -Dbundle.snappy=true -Dsnappy.prefix=x -Dsnappy.lib=/usr/lib64 -Drequire.zstd=true -Drequire.pmdk=true -Drequire.fuse=true -Dpmdk.lib=/usr/lib64 -Drequire.openssl=true -Dmaven.javadoc.skip=true -Dhbase.profile=2.0 -Dcontainer-executor.additional_cflags='-std=c99' -DskipTests -DskipITs -Pdist,native,src -Dtar"
+    dependencies:
+      - zookeeper
+
+  hive-p1:
+    name: hive-p1
+    description: "Apache Hive P1 - Distributed data warehouse"
+    is_p1: true
+    github_repo: "git@github.com:acceldata-io/hive.git"
+    build_command: "mvn clean deploy -Dtar -Pdist -Pgcs -Paws -Pazure -Psources -DskipTests -Dmaven.javadoc.skip=true -DcreateChecksum=true -PcleanUICache -Pvisualize -Ptools -Dallow.roobuild -pl org.apache.hive:hive-common,org.apache.hive:hive-service,org.apache.hive:hive-exec,org.apache.hive:hive-metastore,org.apache.hive:hive-jdbc,org.apache.hive:hive-storage-api,org.apache.hive:hive-cli,org.apache.hive.hcatalog:hive-hcatalog-core,org.apache.hive.hcatalog:hive-webhcat-java-client,org.apache.hive:hive-beeline,org.apache.hive:hive-service-rpc,org.apache.hive:hive-streaming,org.apache.hive:hive-llap-ext-client,org.apache.hive.hcatalog:hive-hcatalog-server-extensions,org.apache.hive.hcatalog:hive-hcatalog-pig-adapter,org.apache.hive:hive-classification,org.apache.hive:hive-standalone-metastore-common,org.apache.hive:hive-standalone-metastore-server,org.apache.hive.shims:hive-shims-common,org.apache.hive:hive-llap-server,org.apache.hive:hive-serde -am"
+    dependencies:
+      - hadoop-p1
+
+  ranger-p1:
+    name: ranger-p1
+    description: "Apache Ranger P1 - Distributed security"
+    is_p1: true
+    github_repo: "git@github.com:acceldata-io/ranger.git"
+    build_command: "mvn clean compile package install deploy -Dmaven.test.skip=true -DskipTests -DskipJSTests -Pall,ranger-jdk11,linux-pam -pl org.apache.ranger:ranger-plugins-common,org.apache.ranger:ranger-plugin-classloader,org.apache.ranger:ranger-plugins-audit,org.apache.ranger:ranger-intg -am"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - kafka
+      - kafka3
+      - hbase
+      - hive-p1
+      - knox
+      - tez
+      - sqoop
+    
+
   # Standard Components - Built from odp-bigtop repository
   zookeeper:
     name: zookeeper
@@ -40,3 +77,270 @@ components:
       - zookeeper
       - kafka3
       - hbase-p1
+
+  cruise-control:      
+    name: cruise-control
+    description: "Apache Cruise Control - Distributed streaming platform"
+    build_command: "cruise-control-clean && cruise-control-rpm --info"
+    dependencies:
+      - kafka
+      - zookeeper
+
+  cruise-control3:
+    name: cruise-control3
+    description: "Apache Cruise Control3 - Distributed streaming platform"
+    build_command: "cruise-control3-clean && cruise-control3-rpm --info"
+    dependencies:
+      - kafka3
+      - zookeeper
+  
+  hbase:
+    name: hbase
+    description: "Apache HBase - Distributed storage and processing"
+    build_command: "hbase-clean && hbase-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+
+  knox:    
+    name: knox
+    description: "Apache Knox - Distributed gateway"
+    build_command: "knox-clean && knox-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+
+  tez:
+    name: tez
+    description: "Apache Tez - Distributed processing"
+    build_command: "tez-clean && tez-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+
+  spark3:
+    name: spark3
+    description: "Apache Spark3 - Distributed processing"
+    build_command: "spark3-clean && spark3-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - kafka3
+
+  hbase-connectors:    
+    name: hbase-connectors
+    description: "Apache HBase Connectors - Distributed connectors"
+    build_command: "hbase-connectors-clean && hbase-connectors-rpm --info"
+    dependencies:
+      - hbase
+      - hadoop
+      - kafka3
+      - spark3
+
+  phoenix:
+    name: phoenix
+    description: "Apache Phoenix - Distributed SQL engine"
+    build_command: "phoenix-clean && phoenix-rpm --info"
+    dependencies:
+      - hbase
+      - hadoop
+      - zookeeper
+      - tez
+      - spark3
+      - hive-p1
+
+  spark3-warehouse-connector:    
+    name: spark3-warehouse-connector
+    description: "Apache Spark3 Warehouse Connector - Distributed warehouse connector"
+    build_command: "spark3-warehouse-connector-clean && spark3-warehouse-connector-rpm --info"
+    dependencies:
+      - spark3
+      - hive-p1
+      - tez
+      
+  zeppelin:    
+    name: zeppelin
+    description: "Apache Zeppelin - Distributed notebook"
+    build_command: "zeppelin-clean && zeppelin-rpm --info"
+    dependencies:
+      - hadoop
+      - phoenix
+      - spark3
+      - hive-p1
+
+  livy3:
+    name: livy3
+    description: "Apache Livy3 - Distributed notebook"
+    build_command: "livy3-clean && livy3-rpm --info"
+    dependencies:
+      - hadoop
+      - spark3
+      - hive-p1
+      - zookeeper
+
+  sqoop:
+    name: sqoop
+    description: "Apache Sqoop - Distributed data transfer"
+    build_command: "sqoop-clean && sqoop-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - hbase
+      - hive-p1
+
+  oozie:    
+    name: oozie
+    description: "Apache Oozie - Distributed workflow engine"
+    build_command: "oozie-clean && oozie-rpm --info"
+    dependencies:
+      - hadoop
+      - hive-p1
+      - sqoop
+      - spark3
+      - hbase
+      - tez
+
+  flink:
+    name: flink
+    description: "Apache Flink - Distributed streaming platform"
+    build_command: "flink-clean && flink-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - kafka3
+      - hive-p1    
+
+  pinot:    
+    name: pinot
+    description: "Apache Pinot - Distributed streaming platform"
+    build_command: "pinot-clean && pinot-rpm --info"
+    dependencies:
+      - zookeeper
+      - hadoop
+      - spark3
+      - kafka3
+      - kafka  
+      - flink
+
+  registry:    
+    name: registry
+    description: "Apache Registry - Distributed registry"
+    build_command: "registry-clean && registry-rpm --info"
+    dependencies:
+      - hadoop
+      - kafka3
+      - ranger-p1
+
+  ozone:
+    name: ozone
+    description: "Apache Ozone - Distributed storage and processing"
+    build_command: "ozone-clean && ozone-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - ranger-p1
+
+  impala:    
+    name: impala
+    description: "Apache Impala - Distributed streaming platform"
+    build_command: "impala-clean && impala-rpm --info"
+    dependencies:
+      - hadoop
+      - hbase
+      - hive-p1
+      - knox
+      - ozone
+      - ranger-p1
+      - tez
+
+  druid:    
+    name: druid
+    description: "Apache Druid - Distributed streaming platform"
+    build_command: "druid-clean && druid-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - kafka3
+      - hive-p1
+      - ranger-p1
+
+  trino:    
+    name: trino
+    description: "Apache Trino - Distributed streaming platform"
+    build_command: "trino-clean && trino-rpm --info"
+    dependencies:
+      - pinot
+      - hbase
+      - phoenix
+      - ranger-p1
+      - hive-p1
+      - kafka3
+      - zookeeper
+      - hadoop
+
+  ranger:
+    name: ranger
+    description: "Apache Ranger - Distributed security"
+    build_command: "ranger-clean && ranger-rpm --info"
+    dependencies:
+      - hadoop
+      - zookeeper
+      - kafka
+      - hbase
+      - hive-p1
+      - knox
+      - tez
+      - sqoop
+      - registry
+      - ozone
+      - trino
+
+  kudu:
+    name: kudu
+    description: "Apache Kudu - Distributed storage and processing"
+    build_command: "kudu-clean && kudu-rpm --info"
+    dependencies:
+      - spark3
+      - ranger
+      - hive-p1
+      - hadoop
+
+  hive:
+    name: hive
+    description: "Apache Hive - Distributed data warehouse"
+    build_command: "hive-clean && hive-rpm --info"
+    dependencies:
+      - hadoop
+      - hbase
+      - tez
+      - zookeeper
+      - kudu
+      - kafka3
+      - druid
+
+  nifi:
+    name: nifi
+    description: "Apache Nifi - Distributed streaming platform"
+    build_command: "nifi-clean && nifi-rpm --info"
+    dependencies:
+      - ranger
+      - hadoop
+      - ozone
+      - zookeeper
+      - hbase
+      - registry
+      - kudu
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
