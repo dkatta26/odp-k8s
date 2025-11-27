@@ -53,27 +53,27 @@ components:
   zookeeper:
     name: zookeeper
     description: "Apache ZooKeeper - Distributed coordination service"
-    build_command: "zookeeper-clean && zookeeper-rpm --info"
+    build_command: "./gradlew zookeeper-clean && ./gradlew zookeeper-rpm --info"
     dependencies: []
 
   kafka:
     name: kafka
     description: "Apache Kafka - Distributed streaming platform"
-    build_command: "kafka-clean && kafka-rpm --info"
+    build_command: "./gradlew kafka-clean && ./gradlew kafka-rpm --info"
     dependencies:
       - zookeeper
 
   kafka3:
     name: kafka3
     description: "Apache Kafka3 - Distributed streaming platform"
-    build_command: "kafka3-clean && kafka3-rpm --info"
+    build_command: "./gradlew kafka3-clean && ./gradlew kafka3-rpm --info"
     dependencies:
       - zookeeper      
     
   hadoop:
     name: hadoop
     description: "Apache Hadoop - Distributed storage and processing"
-    build_command: "hadoop-clean && hadoop-rpm --info"
+    build_command: "./gradlew hadoop-clean && ./gradlew hadoop-rpm --info"
     dependencies:
       - zookeeper
       - kafka3
@@ -82,7 +82,7 @@ components:
   cruise-control:      
     name: cruise-control
     description: "Apache Cruise Control - Distributed streaming platform"
-    build_command: "cruise-control-clean && cruise-control-rpm --info"
+    build_command: "./gradlew cruise-control-clean && ./gradlew cruise-control-rpm --info"
     dependencies:
       - kafka
       - zookeeper
@@ -90,7 +90,7 @@ components:
   cruise-control3:
     name: cruise-control3
     description: "Apache Cruise Control3 - Distributed streaming platform"
-    build_command: "cruise-control3-clean && cruise-control3-rpm --info"
+    build_command: "./gradlew cruise-control3-clean && ./gradlew cruise-control3-rpm --info"
     dependencies:
       - kafka3
       - zookeeper
@@ -98,7 +98,7 @@ components:
   hbase:
     name: hbase
     description: "Apache HBase - Distributed storage and processing"
-    build_command: "hbase-clean && hbase-rpm --info"
+    build_command: "./gradlew hbase-clean && ./gradlew hbase-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -106,7 +106,7 @@ components:
   knox:    
     name: knox
     description: "Apache Knox - Distributed gateway"
-    build_command: "knox-clean && knox-rpm --info"
+    build_command: "./gradlew knox-clean && ./gradlew knox-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -114,7 +114,7 @@ components:
   tez:
     name: tez
     description: "Apache Tez - Distributed processing"
-    build_command: "tez-clean && tez-rpm --info"
+    build_command: "./gradlew tez-clean && ./gradlew tez-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -122,7 +122,7 @@ components:
   spark3:
     name: spark3
     description: "Apache Spark3 - Distributed processing"
-    build_command: "spark3-clean && spark3-rpm --info"
+    build_command: "./gradlew spark3-clean && ./gradlew spark3-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -131,7 +131,7 @@ components:
   hbase-connectors:    
     name: hbase-connectors
     description: "Apache HBase Connectors - Distributed connectors"
-    build_command: "hbase-connectors-clean && hbase-connectors-rpm --info"
+    build_command: "./gradlew hbase-connectors-clean && ./gradlew hbase-connectors-rpm --info"
     dependencies:
       - hbase
       - hadoop
@@ -141,7 +141,7 @@ components:
   phoenix:
     name: phoenix
     description: "Apache Phoenix - Distributed SQL engine"
-    build_command: "phoenix-clean && phoenix-rpm --info"
+    build_command: "./gradlew phoenix-clean && ./gradlew phoenix-rpm --info"
     dependencies:
       - hbase
       - hadoop
@@ -153,7 +153,7 @@ components:
   spark3-warehouse-connector:    
     name: spark3-warehouse-connector
     description: "Apache Spark3 Warehouse Connector - Distributed warehouse connector"
-    build_command: "spark3-warehouse-connector-clean && spark3-warehouse-connector-rpm --info"
+    build_command: "./gradlew spark3-warehouse-connector-clean && ./gradlew spark3-warehouse-connector-rpm --info"
     dependencies:
       - spark3
       - hive-p1
@@ -162,7 +162,7 @@ components:
   zeppelin:    
     name: zeppelin
     description: "Apache Zeppelin - Distributed notebook"
-    build_command: "zeppelin-clean && zeppelin-rpm --info"
+    build_command: "./gradlew zeppelin-clean && ./gradlew zeppelin-rpm --info"
     dependencies:
       - hadoop
       - phoenix
@@ -172,7 +172,7 @@ components:
   livy3:
     name: livy3
     description: "Apache Livy3 - Distributed notebook"
-    build_command: "livy3-clean && livy3-rpm --info"
+    build_command: "./gradlew livy3-clean && ./gradlew livy3-rpm --info"
     dependencies:
       - hadoop
       - spark3
@@ -182,7 +182,7 @@ components:
   sqoop:
     name: sqoop
     description: "Apache Sqoop - Distributed data transfer"
-    build_command: "sqoop-clean && sqoop-rpm --info"
+    build_command: "./gradlew sqoop-clean && ./gradlew sqoop-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -192,7 +192,7 @@ components:
   oozie:    
     name: oozie
     description: "Apache Oozie - Distributed workflow engine"
-    build_command: "oozie-clean && oozie-rpm --info"
+    build_command: "./gradlew oozie-clean && ./gradlew oozie-rpm --info"
     dependencies:
       - hadoop
       - hive-p1
@@ -204,7 +204,7 @@ components:
   flink:
     name: flink
     description: "Apache Flink - Distributed streaming platform"
-    build_command: "flink-clean && flink-rpm --info"
+    build_command: "./gradlew flink-clean && ./gradlew flink-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -214,7 +214,7 @@ components:
   pinot:    
     name: pinot
     description: "Apache Pinot - Distributed streaming platform"
-    build_command: "pinot-clean && pinot-rpm --info"
+    build_command: "./gradlew pinot-clean && ./gradlew pinot-rpm --info"
     dependencies:
       - zookeeper
       - hadoop
@@ -226,7 +226,7 @@ components:
   registry:    
     name: registry
     description: "Apache Registry - Distributed registry"
-    build_command: "registry-clean && registry-rpm --info"
+    build_command: "./gradlew registry-clean && ./gradlew registry-rpm --info"
     dependencies:
       - hadoop
       - kafka3
@@ -235,7 +235,7 @@ components:
   ozone:
     name: ozone
     description: "Apache Ozone - Distributed storage and processing"
-    build_command: "ozone-clean && ozone-rpm --info"
+    build_command: "./gradlew ozone-clean && ./gradlew ozone-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -244,7 +244,7 @@ components:
   impala:    
     name: impala
     description: "Apache Impala - Distributed streaming platform"
-    build_command: "impala-clean && impala-rpm --info"
+    build_command: "./gradlew impala-clean && ./gradlew impala-rpm --info"
     dependencies:
       - hadoop
       - hbase
@@ -257,7 +257,7 @@ components:
   druid:    
     name: druid
     description: "Apache Druid - Distributed streaming platform"
-    build_command: "druid-clean && druid-rpm --info"
+    build_command: "./gradlew druid-clean && ./gradlew druid-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -268,7 +268,7 @@ components:
   trino:    
     name: trino
     description: "Apache Trino - Distributed streaming platform"
-    build_command: "trino-clean && trino-rpm --info"
+    build_command: "./gradlew trino-clean && ./gradlew trino-rpm --info"
     dependencies:
       - pinot
       - hbase
@@ -282,7 +282,7 @@ components:
   ranger:
     name: ranger
     description: "Apache Ranger - Distributed security"
-    build_command: "ranger-clean && ranger-rpm --info"
+    build_command: "./gradlew ranger-clean && ./gradlew ranger-rpm --info"
     dependencies:
       - hadoop
       - zookeeper
@@ -299,7 +299,7 @@ components:
   kudu:
     name: kudu
     description: "Apache Kudu - Distributed storage and processing"
-    build_command: "kudu-clean && kudu-rpm --info"
+    build_command: "./gradlew kudu-clean && ./gradlew kudu-rpm --info"
     dependencies:
       - spark3
       - ranger
@@ -309,7 +309,7 @@ components:
   hive:
     name: hive
     description: "Apache Hive - Distributed data warehouse"
-    build_command: "hive-clean && hive-rpm --info"
+    build_command: "./gradlew hive-clean && ./gradlew hive-rpm --info"
     dependencies:
       - hadoop
       - hbase
@@ -322,7 +322,7 @@ components:
   nifi:
     name: nifi
     description: "Apache Nifi - Distributed streaming platform"
-    build_command: "nifi-clean && nifi-rpm --info"
+    build_command: "./gradlew nifi-clean && ./gradlew nifi-rpm --info"
     dependencies:
       - ranger
       - hadoop
@@ -345,3 +345,4 @@ components:
 
 
       
+
