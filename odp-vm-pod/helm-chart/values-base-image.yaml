@@ -1,0 +1,122 @@
+# ODP Kubernetes Deployment with Base OS Image
+# Installs ODP packages at runtime (no custom image builds needed)
+
+clusterName: "odp-cluster"
+
+# Use standard OS image (no ODP pre-installed)
+image:
+  repository: "rockylinux"  # or "ubuntu" or "registry.access.redhat.com/ubi9/ubi"
+  tag: "9"  # Rocky Linux 9
+  pullPolicy: IfNotPresent
+
+# ODP Installation Configuration
+# These packages will be installed at pod startup
+odp:
+  version: "3.3.6.3-1"
+
+  # Repository URLs (where to download ODP from)
+  repositories:
+    odp: "https://mirror.odp.acceldata.dev/ODP/centos/3.3.6.3-1/"
+    ambari: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+
+  # Java version to install
+  java:
+    version: "11"  # or "8" or "17"
+    package: "java-11-openjdk java-11-openjdk-devel"
+
+  # Components to install (can be customized per deployment)
+  components:
+    - ambari-server
+    - ambari-agent
+    - hadoop
+    - hadoop-hdfs
+    - hadoop-yarn
+    - hadoop-mapreduce
+    - hive
+    - hbase
+    - zookeeper
+    - kafka
+    - spark2
+
+# Cluster Topology
+nodes:
+  master:
+    count: 1
+    resources:
+      requests:
+        memory: "30Gi"
+        cpu: "6"
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+    storage:
+      data:
+        size: "100Gi"
+        storageClassName: "local-path"
+      logs:
+        size: "50Gi"
+        storageClassName: "local-path"
+
+  worker:
+    count: 2
+    resources:
+      requests:
+        memory: "30Gi"
+        cpu: "6"
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+    storage:
+      data:
+        size: "500Gi"
+        storageClassName: "local-path"
+      logs:
+        size: "100Gi"
+        storageClassName: "local-path"
+
+# Service configuration
+services:
+  ambari:
+    enabled: true
+    type: NodePort
+    port: 8080
+    nodePort: 30880
+
+# Init script that runs at pod startup to install ODP
+initScript: |
+  #!/bin/bash
+  set -e
+
+  echo "=== ODP Installation Started ==="
+
+  # Setup repositories
+  cat > /etc/yum.repos.d/odp.repo <<EOF
+  [ODP-3.3.6.3]
+  name=ODP Version 3.3.6.3
+  baseurl={{ .Values.odp.repositories.odp }}
+  gpgcheck=0
+  enabled=1
+
+  [AMBARI-2.7.6.0]
+  name=Ambari Version 2.7.6.0
+  baseurl={{ .Values.odp.repositories.ambari }}
+  gpgcheck=0
+  enabled=1
+  EOF
+
+  # Install Java
+  echo "Installing Java..."
+  yum install -y {{ .Values.odp.java.package }}
+
+  # Install ODP components
+  echo "Installing ODP components..."
+  yum install -y {{ range .Values.odp.components }}{{ . }} {{ end }}
+
+  # Setup directories
+  mkdir -p /hadoop/hdfs/{namenode,datanode} /hadoop/yarn/{local,logs}
+  mkdir -p /var/log/{hadoop,ambari-server,ambari-agent,hive,hbase,zookeeper,kafka}
+
+  # Enable services
+  systemctl enable sshd ambari-server ambari-agent
+
+  echo "=== ODP Installation Completed ==="

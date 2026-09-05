@@ -1,0 +1,207 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.clusterName }}-master
+  labels:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+    role: master
+spec:
+  serviceName: {{ .Values.clusterName }}-headless
+  replicas: {{ .Values.nodes.master.count }}
+  selector:
+    matchLabels:
+      app: odp-cluster
+      cluster: {{ .Values.clusterName }}
+      role: master
+  template:
+    metadata:
+      labels:
+        app: odp-cluster
+        cluster: {{ .Values.clusterName }}
+        role: master
+    spec:
+      # Init container to install ODP packages at startup
+      initContainers:
+      - name: install-odp
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          set -e
+
+          echo "=== Starting ODP Installation ==="
+          echo "ODP Version: {{ .Values.odp.version }}"
+
+          # Check if already installed (for pod restarts)
+          if [ -f /opt/odp/.installed ]; then
+            echo "ODP already installed, skipping..."
+            exit 0
+          fi
+
+          # Setup ODP repository
+          cat > /etc/yum.repos.d/odp.repo <<'EOF'
+          [ODP]
+          name=ODP {{ .Values.odp.version }}
+          baseurl={{ .Values.odp.repositories.odp }}
+          gpgcheck=0
+          enabled=1
+          priority=1
+
+          [AMBARI]
+          name=Ambari
+          baseurl={{ .Values.odp.repositories.ambari }}
+          gpgcheck=0
+          enabled=1
+          priority=1
+          EOF
+
+          # Install required system packages
+          echo "Installing system packages..."
+          yum install -y \
+            systemd \
+            openssh-server \
+            wget curl tar gzip \
+            net-tools bind-utils \
+            which sudo rsync \
+            python3 python3-pip
+
+          # Install Java
+          echo "Installing Java {{ .Values.odp.java.version }}..."
+          yum install -y {{ .Values.odp.java.package }}
+
+          # Install ODP components
+          echo "Installing ODP components..."
+          yum install -y \
+            ambari-server \
+            ambari-agent \
+            hadoop \
+            hadoop-hdfs-namenode \
+            hadoop-hdfs-datanode \
+            hadoop-hdfs-journalnode \
+            hadoop-yarn-resourcemanager \
+            hadoop-yarn-nodemanager \
+            hadoop-mapreduce \
+            hive \
+            hive-server2 \
+            hive-metastore \
+            hbase \
+            hbase-master \
+            hbase-regionserver \
+            zookeeper \
+            zookeeper-server \
+            kafka \
+            spark2
+
+          # Create directories
+          echo "Creating directories..."
+          mkdir -p \
+            /hadoop/hdfs/namenode \
+            /hadoop/hdfs/datanode \
+            /hadoop/yarn/local \
+            /hadoop/yarn/logs \
+            /var/log/hadoop \
+            /var/log/ambari-server \
+            /var/log/ambari-agent \
+            /var/log/hive \
+            /var/log/hbase \
+            /var/log/zookeeper \
+            /var/log/kafka
+
+          # Set permissions
+          chmod -R 755 /hadoop /var/log
+
+          # Mark as installed
+          mkdir -p /opt/odp
+          echo "{{ .Values.odp.version }}" > /opt/odp/.installed
+          date >> /opt/odp/.installed
+
+          echo "=== ODP Installation Completed ==="
+
+        volumeMounts:
+        - name: data
+          mountPath: /hadoop
+        - name: logs
+          mountPath: /var/log
+        - name: odp-install-marker
+          mountPath: /opt/odp
+
+      # Main container
+      containers:
+      - name: odp-node
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        # Run systemd as init system
+        command: ["/usr/sbin/init"]
+
+        env:
+        - name: NODE_TYPE
+          value: "master"
+        - name: CLUSTER_NAME
+          value: {{ .Values.clusterName }}
+        - name: ODP_VERSION
+          value: {{ .Values.odp.version }}
+
+        resources:
+          {{- toYaml .Values.nodes.master.resources | nindent 10 }}
+
+        ports:
+        - name: ssh
+          containerPort: 22
+        - name: ambari-web
+          containerPort: 8080
+        - name: namenode-web
+          containerPort: 9870
+        - name: namenode-rpc
+          containerPort: 8020
+        - name: yarn-rm-web
+          containerPort: 8088
+        - name: zookeeper
+          containerPort: 2181
+
+        volumeMounts:
+        - name: data
+          mountPath: /hadoop
+        - name: logs
+          mountPath: /var/log
+        - name: odp-install-marker
+          mountPath: /opt/odp
+        - name: systemd-cgroup
+          mountPath: /sys/fs/cgroup
+          readOnly: true
+
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+
+      volumes:
+      - name: systemd-cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+          type: Directory
+      - name: odp-install-marker
+        emptyDir: {}
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: {{ .Values.nodes.master.storage.data.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.nodes.master.storage.data.size }}
+
+  - metadata:
+      name: logs
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: {{ .Values.nodes.master.storage.logs.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.nodes.master.storage.logs.size }}
