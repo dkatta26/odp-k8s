@@ -1,0 +1,120 @@
+{{- if gt (.Values.nodes.worker.count | int) 0 }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.clusterName }}-worker
+  labels:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+    role: worker
+spec:
+  serviceName: {{ .Values.clusterName }}-headless
+  replicas: {{ .Values.nodes.worker.count }}
+  selector:
+    matchLabels:
+      app: odp-cluster
+      cluster: {{ .Values.clusterName }}
+      role: worker
+  template:
+    metadata:
+      labels:
+        app: odp-cluster
+        cluster: {{ .Values.clusterName }}
+        role: worker
+    spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+
+      containers:
+      - name: odp-node
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        env:
+        - name: NODE_TYPE
+          value: "worker"
+        - name: CLUSTER_NAME
+          value: {{ .Values.clusterName }}
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_INDEX
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ODP_REPO_URL
+          value: {{ .Values.odpConfig.odpRepoUrl }}
+        - name: AMBARI_REPO_URL
+          value: {{ .Values.odpConfig.ambariRepoUrl }}
+
+        resources:
+          {{- toYaml .Values.nodes.worker.resources | nindent 10 }}
+
+        ports:
+        - name: ssh
+          containerPort: 22
+        - name: datanode-web
+          containerPort: 9864
+        - name: datanode-data
+          containerPort: 9866
+        - name: nodemanager
+          containerPort: 8042
+
+        volumeMounts:
+        - name: data
+          mountPath: /hadoop
+        - name: logs
+          mountPath: /var/log
+        - name: systemd-cgroup
+          mountPath: /sys/fs/cgroup
+          readOnly: true
+
+        livenessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - systemctl is-system-running || test $? -eq 1
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - systemctl is-active ambari-agent
+          initialDelaySeconds: 90
+          periodSeconds: 15
+          timeoutSeconds: 5
+
+      volumes:
+      - name: systemd-cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+          type: Directory
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.nodes.worker.storage.storageClass }}
+      storageClassName: {{ .Values.nodes.worker.storage.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.nodes.worker.storage.size }}
+  - metadata:
+      name: logs
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.nodes.worker.storage.storageClass }}
+      storageClassName: {{ .Values.nodes.worker.storage.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: 10Gi
+{{- end }}
