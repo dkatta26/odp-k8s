@@ -1,0 +1,242 @@
+# ═══════════════════════════════════════════════════════════════════
+# ODP Cluster Configuration
+# Edit this file and deploy with: helm install my-cluster helm-chart/ -f my-cluster.yaml
+# ═══════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 1: CLUSTER IDENTITY
+# ─────────────────────────────────────────────────────────────────
+clusterName: "my-odp-cluster"
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 2: IMAGE CONFIGURATION
+# IMPORTANT: Build image first using docker/build-from-repo.sh
+# ─────────────────────────────────────────────────────────────────
+image:
+  # Image tag that was built (see BUILD-GUIDE.md)
+  # Format: <os>-odp<version>-<java>
+  # Examples: rhel9-odp3.3.6.3-1-jdk11, ubuntu22-odp3.3.6.3-1-jdk17
+  repository: "acceldata/odp-vm-node"
+  tag: "rhel9-odp3.3.6.3-1-jdk11"
+  pullPolicy: IfNotPresent
+
+# If using private registry:
+# imagePullSecrets:
+#   - name: my-registry-secret
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 3: NODE CONFIGURATION
+# Define how many "VM pods" you want
+# ─────────────────────────────────────────────────────────────────
+nodes:
+  # Master nodes (run NameNode, ResourceManager, Ambari, etc.)
+  master:
+    count: 1  # Number of master pods (1 for basic, 2-3 for HA)
+
+    # Resources per master pod
+    resources:
+      requests:
+        memory: "30Gi"  # ← CHANGE THIS: Memory per pod
+        cpu: "6"        # ← CHANGE THIS: CPU cores per pod
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+
+    # Storage per master pod
+    storage:
+      size: "100Gi"              # Size of persistent volume
+      storageClass: "standard"   # Your storage class (check: kubectl get sc)
+
+  # Worker nodes (run DataNode, NodeManager, etc.)
+  worker:
+    count: 2  # ← CHANGE THIS: Number of worker pods
+
+    resources:
+      requests:
+        memory: "30Gi"  # ← CHANGE THIS
+        cpu: "6"        # ← CHANGE THIS
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+
+    storage:
+      size: "500Gi"              # Size per worker (DataNode storage)
+      storageClass: "standard"
+
+  # Edge nodes (optional - client access)
+  edge:
+    count: 0  # Usually 0 unless you need dedicated edge nodes
+
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "4"
+      limits:
+        memory: "12Gi"
+        cpu: "6"
+
+    storage:
+      size: "50Gi"
+      storageClass: "standard"
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 4: ODP REPOSITORY CONFIGURATION
+# Where to download ODP packages from (used during image build)
+# These should match what you used in build-from-repo.sh
+# ─────────────────────────────────────────────────────────────────
+odpConfig:
+  odpRepoUrl: "https://mirror.odp.acceldata.dev/ODP/centos/3.3.6.3-1/"
+  ambariRepoUrl: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+  # Optional:
+  # odpUtilsUrl: ""
+  # ambariMpacksUrl: ""
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 5: COMPONENT SELECTION
+# Enable/disable ODP services
+# ─────────────────────────────────────────────────────────────────
+components:
+  # Core components (usually always enabled)
+  hdfs: true
+  yarn: true
+  mapreduce: true
+  zookeeper: true
+
+  # Data processing
+  hive: true
+  tez: true
+  spark: true
+
+  # NoSQL
+  hbase: true
+
+  # Messaging
+  kafka: true
+
+  # Optional components (enable as needed)
+  oozie: false
+  ranger: false
+  rangerKms: false
+  knox: false
+  ozone: false
+  druid: false
+  zeppelin: false
+  sqoop: false
+  httpfs: false
+  jupyterhub: false
+  flink: false
+  impala: false
+  pinot: false
+  kudu: false
+  registry: false
+  airflow: false
+  nifi: false
+  nifiRegistry: false
+  hue: false
+  trino: false
+  clickhouse: false
+  mlflow: false
+  superset: false
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 6: SECURITY CONFIGURATION
+# ─────────────────────────────────────────────────────────────────
+security:
+  # Kerberos authentication
+  kerberos:
+    enabled: false  # Set to true to enable Kerberos
+    realm: "CLUSTER.LOCAL"
+    kdcHost: ""
+    adminPassword: ""
+
+  # SSL/TLS encryption
+  tls:
+    enabled: false  # Set to true to enable SSL/TLS
+    certManager:
+      enabled: true
+      issuer: "selfsigned-issuer"
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 7: NETWORK SERVICES
+# How to expose services externally
+# ─────────────────────────────────────────────────────────────────
+services:
+  # Ambari Web UI
+  ambari:
+    enabled: true
+    type: NodePort      # ClusterIP, NodePort, or LoadBalancer
+    port: 8080
+    nodePort: 30080     # Only if type=NodePort
+
+  # HDFS NameNode UI
+  hdfsNameNode:
+    enabled: true
+    type: NodePort
+    port: 9870
+    nodePort: 30870
+
+  # YARN ResourceManager UI
+  yarnResourceManager:
+    enabled: true
+    type: NodePort
+    port: 8088
+    nodePort: 30088
+
+  # SSH access (for debugging)
+  ssh:
+    enabled: true
+    type: ClusterIP
+    port: 22
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 8: RESOURCE QUOTAS (Optional)
+# Limit total resources this cluster can use in namespace
+# ─────────────────────────────────────────────────────────────────
+resourceQuota:
+  enabled: false  # Enable if you want to set namespace limits
+  hard:
+    requests.cpu: "64"
+    requests.memory: "128Gi"
+    requests.storage: "2Ti"
+    persistentvolumeclaims: "20"
+    pods: "50"
+
+# ─────────────────────────────────────────────────────────────────
+# SECTION 9: ADVANCED SETTINGS (Usually don't need to change)
+# ─────────────────────────────────────────────────────────────────
+
+# Security context (required for systemd)
+securityContext:
+  privileged: true
+  capabilities:
+    add:
+      - SYS_ADMIN
+      - NET_ADMIN
+
+# Network policies
+networkPolicy:
+  enabled: false  # Enable for network isolation
+  allowExternal: true
+
+# ═══════════════════════════════════════════════════════════════════
+# QUICK START GUIDE
+# ═══════════════════════════════════════════════════════════════════
+#
+# 1. Edit this file:
+#    - Set clusterName
+#    - Set image.tag (from your build)
+#    - Set nodes.master.count and nodes.worker.count
+#    - Set resources (memory, cpu)
+#    - Enable/disable components
+#
+# 2. Deploy:
+#    helm install my-cluster helm-chart/ -f my-cluster.yaml --namespace my-ns --create-namespace
+#
+# 3. Access:
+#    kubectl port-forward my-cluster-master-0 8080:8080 -n my-ns
+#    Open: http://localhost:8080
+#
+# 4. Cleanup:
+#    helm uninstall my-cluster --namespace my-ns
+#
+# ═══════════════════════════════════════════════════════════════════

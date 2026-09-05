@@ -1,0 +1,14 @@
+apiVersion: v2
+name: odp-cluster
+description: ODP Cluster with VM-like pods - each pod runs all services
+type: application
+version: 1.0.0
+appVersion: "3.3.6.3-1"
+keywords:
+  - hadoop
+  - odp
+  - big-data
+  - vm-pod
+maintainers:
+  - name: Divesh
+    email: divesh@acceldata.io

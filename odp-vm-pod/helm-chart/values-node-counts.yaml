@@ -1,0 +1,286 @@
+# Node Count Examples - Matching Jenkins Pipeline Options
+# Similar to your current NODE_COUNT parameter: 1,2,3,3_HA,4,4_HA,5,6,7,8,9,10
+
+# Common configuration for all examples
+common: &common
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "rhel9-odp3.3.6.3-jdk11"
+
+  # Default resources (adjust as needed)
+  defaultResources: &defaultResources
+    requests:
+      memory: "30Gi"
+      cpu: "6"
+    limits:
+      memory: "32Gi"
+      cpu: "8"
+
+# =========================================================================
+# 1 Node - Everything on one pod (minimal testing)
+# =========================================================================
+topology-1-node:
+  clusterName: "cluster-1node"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "200Gi"  # Larger since it's the only node
+
+    worker:
+      count: 0  # No separate workers
+
+# =========================================================================
+# 2 Nodes - 1 master + 1 worker
+# =========================================================================
+topology-2-nodes:
+  clusterName: "cluster-2nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 3 Nodes - 1 master + 2 workers
+# =========================================================================
+topology-3-nodes:
+  clusterName: "cluster-3nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 2
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 3 Nodes HA - 2 masters + 1 worker (High Availability)
+# =========================================================================
+topology-3-nodes-ha:
+  clusterName: "cluster-3nodes-ha"
+
+  nodes:
+    master:
+      count: 2  # HA configuration
+      resources: *defaultResources
+      storage:
+        size: "150Gi"
+
+    worker:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 4 Nodes - 1 master + 3 workers
+# =========================================================================
+topology-4-nodes:
+  clusterName: "cluster-4nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 3
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 4 Nodes HA - 2 masters + 2 workers (High Availability)
+# =========================================================================
+topology-4-nodes-ha:
+  clusterName: "cluster-4nodes-ha"
+
+  nodes:
+    master:
+      count: 2  # HA configuration
+      resources: *defaultResources
+      storage:
+        size: "150Gi"
+
+    worker:
+      count: 2
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 5 Nodes - 1 master + 4 workers
+# =========================================================================
+topology-5-nodes:
+  clusterName: "cluster-5nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 4
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 6 Nodes - 1 master + 5 workers
+# =========================================================================
+topology-6-nodes:
+  clusterName: "cluster-6nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 5
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 7 Nodes - 1 master + 6 workers
+# =========================================================================
+topology-7-nodes:
+  clusterName: "cluster-7nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 6
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 8 Nodes - 1 master + 7 workers
+# =========================================================================
+topology-8-nodes:
+  clusterName: "cluster-8nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 7
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 9 Nodes - 1 master + 8 workers
+# =========================================================================
+topology-9-nodes:
+  clusterName: "cluster-9nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 8
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 10 Nodes - 1 master + 9 workers
+# =========================================================================
+topology-10-nodes:
+  clusterName: "cluster-10nodes"
+
+  nodes:
+    master:
+      count: 1
+      resources: *defaultResources
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 9
+      resources: *defaultResources
+      storage:
+        size: "500Gi"
+
+# =========================================================================
+# 10 Nodes HA - 3 masters + 7 workers (Production HA)
+# =========================================================================
+topology-10-nodes-ha:
+  clusterName: "cluster-10nodes-ha"
+
+  nodes:
+    master:
+      count: 3  # 3 masters for HA
+      resources: *defaultResources
+      storage:
+        size: "200Gi"
+
+    worker:
+      count: 7
+      resources: *defaultResources
+      storage:
+        size: "1Ti"
+
+# =========================================================================
+# CUSTOM - Set any number you want
+# =========================================================================
+topology-custom:
+  clusterName: "cluster-custom"
+
+  nodes:
+    master:
+      count: 2  # Change this
+      resources:
+        requests:
+          memory: "30Gi"  # Change this
+          cpu: "6"        # Change this
+      storage:
+        size: "100Gi"     # Change this
+
+    worker:
+      count: 5  # Change this
+      resources:
+        requests:
+          memory: "30Gi"
+          cpu: "6"
+      storage:
+        size: "500Gi"

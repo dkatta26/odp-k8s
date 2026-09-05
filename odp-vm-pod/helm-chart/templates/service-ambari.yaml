@@ -1,0 +1,23 @@
+{{- if .Values.services.ambari.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.clusterName }}-ambari
+  labels:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+    service: ambari
+spec:
+  type: {{ .Values.services.ambari.type }}
+  selector:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+    role: master
+  ports:
+  - name: http
+    port: {{ .Values.services.ambari.port }}
+    targetPort: 8080
+    {{- if and (eq .Values.services.ambari.type "NodePort") .Values.services.ambari.nodePort }}
+    nodePort: {{ .Values.services.ambari.nodePort }}
+    {{- end }}
+{{- end }}

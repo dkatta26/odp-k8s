@@ -1,0 +1,205 @@
+# Examples of different cluster configurations
+# Copy one of these sections to values.yaml or use with -f flag
+
+# =========================================================================
+# Example 1: Small Dev Cluster (RHEL 9, ODP 3.3.6.3, JDK 11)
+# =========================================================================
+example-small-dev:
+  clusterName: "dev-small"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "rhel9-odp3.3.6.3-jdk11"
+
+  nodes:
+    master:
+      count: 1
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "16Gi"
+          cpu: "8"
+      storage:
+        size: "50Gi"
+
+    worker:
+      count: 2
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "16Gi"
+          cpu: "8"
+      storage:
+        size: "100Gi"
+
+# =========================================================================
+# Example 2: Large Testing Cluster (30GB RAM, 6 cores per pod)
+# =========================================================================
+example-large-test:
+  clusterName: "test-large"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "rhel9-odp3.3.6.3-jdk17"
+
+  nodes:
+    master:
+      count: 3  # HA setup
+      resources:
+        requests:
+          memory: "30Gi"  # Your requirement
+          cpu: "6"        # Your requirement
+        limits:
+          memory: "32Gi"
+          cpu: "8"
+      storage:
+        size: "200Gi"
+        storageClass: "fast-ssd"
+
+    worker:
+      count: 5
+      resources:
+        requests:
+          memory: "30Gi"
+          cpu: "6"
+        limits:
+          memory: "32Gi"
+          cpu: "8"
+      storage:
+        size: "500Gi"
+        storageClass: "fast-ssd"
+
+# =========================================================================
+# Example 3: Ubuntu 22 + ZingJDK 11 (Production-like)
+# =========================================================================
+example-ubuntu-zing:
+  clusterName: "prod-zing"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "ubuntu22-odp3.3.6.3-jdk11"  # Or use zingjdk11 variant
+
+  nodes:
+    master:
+      count: 2
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "8"
+        limits:
+          memory: "24Gi"
+          cpu: "12"
+      storage:
+        size: "300Gi"
+
+    worker:
+      count: 4
+      resources:
+        requests:
+          memory: "16Gi"
+          cpu: "8"
+        limits:
+          memory: "24Gi"
+          cpu: "12"
+      storage:
+        size: "1Ti"
+
+# =========================================================================
+# Example 4: Legacy CentOS 7 + Python 2 + JDK 8
+# =========================================================================
+example-centos7-legacy:
+  clusterName: "legacy-test"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "centos7-odp3.2.2.0-jdk8"
+
+  nodes:
+    master:
+      count: 1
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "12Gi"
+          cpu: "6"
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 2
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "4"
+        limits:
+          memory: "12Gi"
+          cpu: "6"
+      storage:
+        size: "200Gi"
+
+# =========================================================================
+# Example 5: Minimal Testing (1 node, smallest resources)
+# =========================================================================
+example-minimal:
+  clusterName: "minimal"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "rhel9-odp3.3.6.3-jdk11"
+
+  nodes:
+    master:
+      count: 1
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "2"
+        limits:
+          memory: "6Gi"
+          cpu: "3"
+      storage:
+        size: "30Gi"
+
+    worker:
+      count: 0  # No workers, master does everything
+
+# =========================================================================
+# Example 6: Custom Resource Allocation (Your 30GB/6core requirement)
+# =========================================================================
+example-custom-30g-6core:
+  clusterName: "custom-cluster"
+
+  image:
+    repository: "acceldata/odp-vm-node"
+    tag: "rhel9-odp3.3.6.3-jdk11"
+
+  nodes:
+    master:
+      count: 1
+      resources:
+        requests:
+          memory: "30Gi"  # Exactly 30GB
+          cpu: "6"        # Exactly 6 cores
+        limits:
+          memory: "30Gi"  # Set same as request for guaranteed QoS
+          cpu: "6"
+      storage:
+        size: "100Gi"
+
+    worker:
+      count: 3
+      resources:
+        requests:
+          memory: "30Gi"
+          cpu: "6"
+        limits:
+          memory: "30Gi"
+          cpu: "6"
+      storage:
+        size: "200Gi"

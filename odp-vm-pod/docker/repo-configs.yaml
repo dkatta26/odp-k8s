@@ -1,0 +1,41 @@
+# ODP Repository Configuration
+# Define where to download ODP packages from during image build
+
+# Production/Latest Releases
+production:
+  odp_3_3_6_3:
+    odp_repo_url: "https://mirror.odp.acceldata.dev/ODP/centos/3.3.6.3-1/"
+    ambari_repo_url: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+    odp_utils_url: ""
+    ambari_mpacks_url: "https://mirror.odp.acceldata.dev/v2/odp/python3/jdk11/3.3.6.2-1/mpacks/"
+
+  odp_3_2_2_0:
+    odp_repo_url: "https://mirror.odp.acceldata.dev/ODP/centos/3.2.2.0-2/"
+    ambari_repo_url: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+    odp_utils_url: ""
+    ambari_mpacks_url: ""
+
+# Custom/Development Builds
+custom:
+  # Add your custom repository URLs here
+  dev_build:
+    odp_repo_url: "https://your-mirror.acceldata.dev/ODP/custom/3.3.x/"
+    ambari_repo_url: "https://your-mirror.acceldata.dev/AMBARI/2.7.x/"
+    odp_utils_url: ""
+    ambari_mpacks_url: ""
+
+# Internal/Private Repositories
+internal:
+  staging:
+    odp_repo_url: "http://internal-mirror.acceldata.io/ODP/staging/"
+    ambari_repo_url: "http://internal-mirror.acceldata.io/AMBARI/staging/"
+    odp_utils_url: ""
+    ambari_mpacks_url: ""
+
+# OS-Specific Repositories
+ubuntu:
+  odp_3_3_6_3:
+    odp_repo_url: "https://mirror.odp.acceldata.dev/ODP/ubuntu/3.3.6.3-1/"
+    ambari_repo_url: "https://mirror.odp.acceldata.dev/AMBARI/ubuntu/2.7.6.0-1/"
+    odp_utils_url: ""
+    ambari_mpacks_url: ""

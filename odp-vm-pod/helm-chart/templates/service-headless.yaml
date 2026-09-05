@@ -1,0 +1,27 @@
+# Headless service for StatefulSet DNS
+# Enables: pod-name.service-name.namespace.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.clusterName }}-headless
+  labels:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+spec:
+  clusterIP: None  # Headless
+  selector:
+    app: odp-cluster
+    cluster: {{ .Values.clusterName }}
+  ports:
+  - name: ssh
+    port: 22
+  - name: ambari
+    port: 8080
+  - name: hdfs-namenode
+    port: 8020
+  - name: hdfs-web
+    port: 9870
+  - name: yarn-rm
+    port: 8088
+  - name: zookeeper
+    port: 2181

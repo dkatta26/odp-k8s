@@ -1,0 +1,48 @@
+# Small Development Cluster
+# 3 nodes, 8GB RAM per pod, basic components
+
+clusterName: "dev-small"
+
+image:
+  repository: "acceldata/odp-vm-node"
+  tag: "rhel9-odp3.3.6.3-1-jdk11"
+
+nodes:
+  master:
+    count: 1
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "4"
+      limits:
+        memory: "12Gi"
+        cpu: "6"
+    storage:
+      size: "50Gi"
+      storageClass: "standard"
+
+  worker:
+    count: 2
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "4"
+      limits:
+        memory: "12Gi"
+        cpu: "6"
+    storage:
+      size: "100Gi"
+      storageClass: "standard"
+
+components:
+  hdfs: true
+  yarn: true
+  hive: true
+  spark: true
+  # Others disabled for minimal setup
+
+services:
+  ambari:
+    enabled: true
+    type: NodePort
+    nodePort: 30080

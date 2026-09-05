@@ -1,0 +1,138 @@
+# ODP VM-Pod Cluster Configuration
+# Each pod acts like a complete VM with all services
+
+# Cluster identification
+clusterName: "odp-cluster"
+
+# Docker image for VM-like pods
+image:
+  repository: "acceldata/odp-vm-node"
+  tag: "3.3.6.3-1"
+  pullPolicy: IfNotPresent
+
+# ODP repository URLs (used during image build)
+odpConfig:
+  odpRepoUrl: "https://mirror.odp.acceldata.dev/ODP/centos/3.3.6.3-1/"
+  ambariRepoUrl: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+
+# Cluster topology
+# Define how many "VMs" you want and their roles
+nodes:
+  # Master nodes (run NameNode, ResourceManager, Ambari Server, etc.)
+  master:
+    count: 1
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "4"
+      limits:
+        memory: "16Gi"
+        cpu: "8"
+    storage:
+      # Persistent storage for each master node
+      size: "100Gi"
+      storageClass: "standard"
+
+  # Worker nodes (run DataNode, NodeManager)
+  worker:
+    count: 2
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "4"
+      limits:
+        memory: "16Gi"
+        cpu: "8"
+    storage:
+      size: "200Gi"
+      storageClass: "standard"
+
+  # Edge nodes (optional - for client access)
+  edge:
+    count: 0
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2"
+      limits:
+        memory: "8Gi"
+        cpu: "4"
+    storage:
+      size: "50Gi"
+      storageClass: "standard"
+
+# Services to expose
+services:
+  # Ambari Web UI
+  ambari:
+    enabled: true
+    type: NodePort  # or LoadBalancer, or ClusterIP
+    port: 8080
+    nodePort: 30080  # only if type=NodePort
+
+  # HDFS NameNode UI
+  hdfsNameNode:
+    enabled: true
+    type: NodePort
+    port: 9870
+    nodePort: 30870
+
+  # YARN ResourceManager UI
+  yarnResourceManager:
+    enabled: true
+    type: NodePort
+    port: 8088
+    nodePort: 30088
+
+  # SSH access (for debugging)
+  ssh:
+    enabled: true
+    type: ClusterIP
+    port: 22
+
+# Security Context
+# systemd requires privileged mode
+securityContext:
+  privileged: true
+  capabilities:
+    add:
+      - SYS_ADMIN
+      - NET_ADMIN
+
+# Components to enable
+# These will be configured via Ambari blueprints
+components:
+  hdfs: true
+  yarn: true
+  mapreduce: true
+  zookeeper: true
+  hive: true
+  hbase: true
+  kafka: true
+  spark: true
+  tez: true
+  oozie: false
+  ranger: false
+  knox: false
+  kerberos: false
+
+# Kerberos configuration (if enabled)
+kerberos:
+  enabled: false
+  realm: "CLUSTER.LOCAL"
+  kdcHost: ""
+  adminPassword: ""
+
+# Resource Quotas (optional - limit per namespace)
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "32"
+    requests.memory: "64Gi"
+    persistentvolumeclaims: "20"
+    pods: "50"
+
+# Network Policy (optional - isolate namespace)
+networkPolicy:
+  enabled: true
+  allowExternal: true

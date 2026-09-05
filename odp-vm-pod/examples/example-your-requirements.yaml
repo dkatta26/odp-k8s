@@ -1,0 +1,64 @@
+# Your Requirements: 5 nodes, 30GB RAM, 6 cores
+# RHEL 9 + ODP 3.3.6.3 + JDK 11
+
+clusterName: "prod-5node"
+
+image:
+  repository: "acceldata/odp-vm-node"
+  tag: "rhel9-odp3.3.6.3-1-jdk11"
+
+nodes:
+  master:
+    count: 1
+    resources:
+      requests:
+        memory: "30Gi"  # Your requirement
+        cpu: "6"        # Your requirement
+      limits:
+        memory: "30Gi"  # Same as request for guaranteed QoS
+        cpu: "6"
+    storage:
+      size: "100Gi"
+      storageClass: "standard"
+
+  worker:
+    count: 4  # Total 5 nodes (1 master + 4 workers)
+    resources:
+      requests:
+        memory: "30Gi"
+        cpu: "6"
+      limits:
+        memory: "30Gi"
+        cpu: "6"
+    storage:
+      size: "500Gi"
+      storageClass: "standard"
+
+odpConfig:
+  odpRepoUrl: "https://mirror.odp.acceldata.dev/ODP/centos/3.3.6.3-1/"
+  ambariRepoUrl: "https://mirror.odp.acceldata.dev/AMBARI/centos/2.7.6.0-1/"
+
+components:
+  hdfs: true
+  yarn: true
+  mapreduce: true
+  zookeeper: true
+  hive: true
+  tez: true
+  hbase: true
+  kafka: true
+  spark: true
+
+services:
+  ambari:
+    enabled: true
+    type: NodePort
+    nodePort: 30080
+  hdfsNameNode:
+    enabled: true
+    type: NodePort
+    nodePort: 30870
+  yarnResourceManager:
+    enabled: true
+    type: NodePort
+    nodePort: 30088

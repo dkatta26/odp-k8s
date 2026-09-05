@@ -1,0 +1,69 @@
+# High Availability Cluster
+# 10 nodes with 3 masters for HA
+
+clusterName: "prod-ha-10node"
+
+image:
+  repository: "acceldata/odp-vm-node"
+  tag: "rhel9-odp3.3.6.3-1-jdk17"
+
+nodes:
+  master:
+    count: 3  # 3 masters for HA
+    resources:
+      requests:
+        memory: "30Gi"
+        cpu: "6"
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+    storage:
+      size: "200Gi"
+      storageClass: "fast-ssd"
+
+  worker:
+    count: 7  # Total 10 nodes (3 masters + 7 workers)
+    resources:
+      requests:
+        memory: "30Gi"
+        cpu: "6"
+      limits:
+        memory: "32Gi"
+        cpu: "8"
+    storage:
+      size: "1Ti"
+      storageClass: "fast-ssd"
+
+components:
+  hdfs: true
+  yarn: true
+  mapreduce: true
+  zookeeper: true
+  hive: true
+  tez: true
+  hbase: true
+  kafka: true
+  spark: true
+  ranger: true
+  knox: true
+
+services:
+  ambari:
+    enabled: true
+    type: LoadBalancer  # Use LoadBalancer for production
+    port: 8080
+  hdfsNameNode:
+    enabled: true
+    type: LoadBalancer
+    port: 9870
+  yarnResourceManager:
+    enabled: true
+    type: LoadBalancer
+    port: 8088
+
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "128"
+    requests.memory: "256Gi"
+    requests.storage: "10Ti"
