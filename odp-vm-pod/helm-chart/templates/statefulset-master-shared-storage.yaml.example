@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.clusterName }}-master
+spec:
+  serviceName: {{ .Values.clusterName }}-headless
+  replicas: {{ .Values.nodes.master.count }}
+  selector:
+    matchLabels:
+      app: odp-cluster
+      cluster: {{ .Values.clusterName }}
+      role: master
+  template:
+    metadata:
+      labels:
+        app: odp-cluster
+        cluster: {{ .Values.clusterName }}
+        role: master
+    spec:
+      initContainers:
+      - name: setup-directories
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          # Create subdirectory for this pod
+          POD_NAME=$(hostname)
+          mkdir -p /shared-storage/data/${POD_NAME}
+          mkdir -p /shared-storage/logs/${POD_NAME}
+
+          # Create symlinks so app sees /hadoop and /var/log
+          ln -sf /shared-storage/data/${POD_NAME} /hadoop
+          ln -sf /shared-storage/logs/${POD_NAME} /var/log-odp
+
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /shared-storage
+
+      - name: install-odp
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          #!/bin/bash
+          set -e
+
+          # Check if already installed
+          POD_NAME=$(hostname)
+          if [ -f /shared-storage/data/${POD_NAME}/.installed ]; then
+            echo "ODP already installed"
+            exit 0
+          fi
+
+          # Install ODP (same as before)
+          yum install -y java-11-openjdk
+          yum install -y ambari-server hadoop ...
+
+          # Mark installed in shared storage
+          echo "installed" > /shared-storage/data/${POD_NAME}/.installed
+
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /shared-storage
+
+      containers:
+      - name: odp-node
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/usr/sbin/init"]
+
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: DATA_DIR
+          value: /shared-storage/data/$(POD_NAME)
+        - name: LOG_DIR
+          value: /shared-storage/logs/$(POD_NAME)
+
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /shared-storage
+          subPathExpr: data/$(POD_NAME)
+          # This mounts only this pod's subdirectory
+
+        securityContext:
+          privileged: true
+
+      volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: odp-shared-storage
+          # All pods share this PVC
