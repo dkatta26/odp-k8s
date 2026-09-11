@@ -1,0 +1,15 @@
+🎉 ODP Cluster "{{ .Release.Name }}" deployed successfully!
+
+📋 Configuration:
+   ODP {{ .Values.OdpVersion }} | {{ .Values.nodes }} nodes | {{ .Values.OperatingSystem | default "rhel8" }} | Python {{ include "odp.getPythonVersion" . }} | JDK {{ include "odp.getJdkVersion" . }}
+   Image: {{ include "odp.getImageName" . }}
+
+{{- if eq .Values.Prebake "Yes" }}
+🏗️  Using prebaked images with tag: {{ .Values.OdpVersion }}
+{{- else }}
+🐳 Using runtime images with tag: latest
+{{- end }}
+
+🚀 Next Steps:
+   1. Check status: kubectl get pods -n {{ .Release.Namespace }}
+   2. Execute ODP setup: kubectl exec -n {{ .Release.Namespace }} {{ .Release.Name }}-0 -- bash /config/bashexec.sh
