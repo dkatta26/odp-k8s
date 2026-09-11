@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Release.Name }}-command"
+  labels:
+    app: "{{ .Release.Name }}"
+data:
+  bashexec.sh: |
+    #!/bin/bash
+
+    # Clean up any existing basher.sh file
+    rm -rf ~/basher.sh
+    
+    # Download basher.sh from GitHub repository
+#    wget -O ~/basher.sh https://raw.githubusercontent.com/acceldata-io/ODP_helm/main/basher.sh
+    wget -O ~/basher.sh https://raw.githubusercontent.com/dkatta26/odp-k8s/build-deploy-k8s-ODP-3.3.6.3-1/deployment-scripts/basher.sh
+    chmod +x ~/basher.sh
+    
+    # Execute basher.sh with all ODP configuration parameters
+    # Parameters passed in order:
+    # 1. Release Name
+    # 2. JDK Version (auto-detected)
+    # 3. Number of nodes
+    # 4. Kerberos setting
+    # 5. Components
+    # 6. ODP Version
+    # 7. Ambari Version
+    # 8. ODP URL
+    # 9. Ambari URL
+    # 10. Utils URL
+    # 11. Python Version (auto-detected)
+    # 12. Mpack URL
+    # 13. Database
+    # 14. HA
+    bash ~/basher.sh \
+      '{{ .Release.Name }}' \
+      '{{ include "odp.getJdkVersion" . }}' \
+      '{{ .Values.nodes }}' \
+      '{{ .Values.Kerberos }}' \
+      '{{ .Values.Components }}' \
+      '{{ .Values.OdpVersion }}' \
+      '{{ .Values.AmbariVersion }}' \
+      '{{ .Values.OdpUrl }}' \
+      '{{ .Values.AmbariUrl }}' \
+      '{{ .Values.UtilsUrl }}' \
+      '{{ include "odp.getPythonVersion" . }}' \
+      '{{ .Values.MpackUrl}}' \
+      '{{ include "odp.getDatabase" . }}' \
+      '{{ include "odp.getHA" . }}' 
+

@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "{{ .Release.Name }}"
+  labels:
+    app: "{{ .Release.Name }}"
+spec:
+  serviceName: "{{ .Release.Name }}"
+  replicas: {{ .Values.nodes }}
+  selector:
+    matchLabels:
+      app: "{{ .Release.Name }}"
+  template:
+    metadata:
+      labels:
+        app: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - name: trial
+          image: "{{ include "odp.getImageName" . }}"
+          {{- if .Values.imagePullPolicy }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          {{- else }}
+          imagePullPolicy: Always
+          {{- end }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - NET_ADMIN
+                - NET_BIND_SERVICE
+                - SYS_CHROOT
+                - AUDIT_WRITE
+                - SETFCAP
+          volumeMounts:
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+              readOnly: false
+            - mountPath: /var/run/dbus/system_bus_socket
+              name: dbus-socket
+              readOnly: true
+            - mountPath: /run
+              name: run-tmpfs
+            - mountPath: /tmp
+              name: tmpfs
+            - mountPath: /config
+              name: command-configmap
+              readOnly: true
+            # Mount LXCFS proc files individually
+            - name: lxcfs-proc
+              mountPath: /proc/cpuinfo
+              subPath: cpuinfo
+            - name: lxcfs-proc
+              mountPath: /proc/meminfo
+              subPath: meminfo
+            - name: lxcfs-proc
+              mountPath: /proc/stat
+              subPath: stat
+            - name: lxcfs-proc
+              mountPath: /proc/uptime
+              subPath: uptime
+            - name: lxcfs-proc
+              mountPath: /proc/loadavg
+              subPath: loadavg
+            # Mount /sys for CPU online info
+            - name: lxcfs-sys
+              mountPath: /sys/devices/system/cpu/online
+              subPath: online
+          resources:
+            requests:
+              cpu: {{ include "odp.defaultCpuRequest" . }}
+              memory: {{ include "odp.defaultMemoryRequest" . }}
+              ephemeral-storage: {{ include "odp.defaultEphemeralRequest" . }}
+            limits:
+              cpu: {{ include "odp.defaultCpuLimit" . }}
+              memory: {{ include "odp.defaultMemoryLimit" . }}
+              ephemeral-storage: {{ include "odp.defaultEphemeralLimit" . }}
+          env:
+            - name: container
+              value: docker
+            {{- $secret := lookup "v1" "Secret" .Release.Namespace "ansible-token" }}
+            {{- if and $secret (hasKey $secret.data "token") }}
+            - name: token
+              valueFrom:
+                secretKeyRef:
+                  name: ansible-token
+                  key: token
+            {{- end }}
+      dnsPolicy: ClusterFirst
+      setHostnameAsFQDN: true
+      restartPolicy: Always
+      volumes:
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
+        - name: dbus-socket
+          hostPath:
+            path: /var/run/dbus/system_bus_socket
+            type: Socket
+        - name: run-tmpfs
+          emptyDir:
+            medium: Memory
+        - name: tmpfs
+          emptyDir:
+            medium: Memory
+        - name: command-configmap
+          configMap:
+            name: "{{ .Release.Name }}-command"
+        - name: lxcfs-proc
+          hostPath:
+            path: /var/lib/lxcfs/proc
+            type: ""
+        - name: lxcfs-sys
+          hostPath:
+            path: /var/lib/lxcfs/sys/devices/system/cpu
+            type: ""
